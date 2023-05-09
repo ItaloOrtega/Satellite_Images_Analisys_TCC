@@ -15,6 +15,12 @@ from rasterio.transform import from_bounds as transform_from_bounds
 
 from models import Image, ColorMap
 
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
+s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+
 _FIRST_POSITION = 0
 _FIRST_MASK_POSITION = 1
 _WIDTH_POSITION = 2
@@ -182,7 +188,7 @@ def open_single_image(image_url: str, image_size: int, geometry: Polygon) -> Dat
     :param geometry: Polygon object of the area requested
     :return: Dataset of the opened image
     """
-    with rasterio.Env():
+    with rasterio.Env(aws_unsigned=True):
         with rasterio.open(image_url) as dataset:
             windowed_dataset = windowed_read_dataset(
                 dataset=dataset,

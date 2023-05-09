@@ -1,3 +1,4 @@
+import os
 import time
 from typing import List
 
@@ -93,6 +94,8 @@ def create_images_files(list_images: List[Image], color_map: ColorMap, file_exte
     :param file_extension: File extension to save the image
     :return: None
     """
+    if os.path.exists('./images') is False:
+        os.mkdir('./images')
     for image in list_images:
         image_file = create_image_with_rasterio(image, color_map, file_extension)
         with open(f'images/{image.id}.{file_extension}', 'wb') as file:
