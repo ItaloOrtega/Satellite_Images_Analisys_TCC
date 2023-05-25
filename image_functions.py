@@ -215,13 +215,21 @@ def create_image_with_rasterio(image: Image, color_map: ColorMap, file_extension
     image_with_color_map = color_map.apply_color_map(image.data)
     raster_image = numpy.append(image_with_color_map, [image.mask], axis=0)
     with MemoryFile() as memfile:
-        with memfile.open(
-            driver=file_extension,
-            count=raster_image.shape[0],
-            height=raster_image.shape[1],
-            width=raster_image.shape[2],
-            dtype=raster_image.dtype,
-            nodata=0,
-        ) as dst:
-            dst.write(raster_image)
+        if file_extension == 'tiff':
+            metadata = image.metadata
+            metadata.update(count=raster_image.shape[0], dtype=raster_image.dtype)
+            if color_map.type == 'raw':
+                metadata.update(nodata=0)
+            with memfile.open(**metadata) as opened_memfile:
+                opened_memfile.write(raster_image)
+        else:
+            with memfile.open(
+                driver=file_extension,
+                count=raster_image.shape[0],
+                height=raster_image.shape[1],
+                width=raster_image.shape[2],
+                dtype=raster_image.dtype,
+                nodata=0,
+            ) as dst:
+                dst.write(raster_image)
         return memfile.read()

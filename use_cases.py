@@ -15,6 +15,7 @@ def get_images_with_index_from_middle_point(
         point_longitude: float,
         start_date_str: str,
         end_date_str: str,
+        file_extension: str,
         days_gap: int = 1,
         max_distance_meters: int = 5000,
         image_size: int = 256,
@@ -74,4 +75,4 @@ def get_images_with_index_from_middle_point(
 
     images_indices = calculate_images_indices(opened_images, index_type, area_from_geom)
 
-    create_images_files(images_indices, color_map_object, 'png')
+    create_images_files(images_indices, color_map_object, file_extension)
