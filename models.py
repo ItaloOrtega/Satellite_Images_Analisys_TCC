@@ -347,3 +347,8 @@ class IndexExpressionType(Enum):
         color_maps=_SINGLE_BAND_LIST_OF_COLOR_MAP,
         ceiling_value=1,
     )
+    raw = Index(
+        name='raw',
+        expression='red, blue, green, nir',
+        color_maps=['raw'],
+    )

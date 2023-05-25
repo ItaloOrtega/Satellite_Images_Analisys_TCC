@@ -70,6 +70,10 @@ def calculate_vari(red: numpy.array, green: numpy.array, blue: numpy.array):
     return numpy.divide(numpy.subtract(green, red), numpy.subtract(numpy.add(green, red), blue))
 
 
+def calculate_raw(red: numpy.array, green: numpy.array, blue: numpy.array, nir: numpy.array):
+    return numpy.asarray([red, blue, green, nir])
+
+
 INDEX_FUNCS = {
     "ndvi": calculate_ndvi,
     "savi": calculate_savi,
@@ -80,7 +84,8 @@ INDEX_FUNCS = {
     "rvi": calculate_rvi,
     "arvi": calculate_arvi,
     "nir": calculate_nir,
-    "vari": calculate_vari
+    "vari": calculate_vari,
+    "raw": calculate_raw
 }
 
 
