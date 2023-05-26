@@ -16,23 +16,6 @@ _HEIGHT_POSITION = 0
 _NODATA_VALUE = 0
 
 
-def check_percentage_of_cloud_coverage(list_scenes: List[SceneInformation], max_cloud_percentage: float) -> bool:
-    """
-    Checks if the images have the mean percentage under the limit to be used.
-
-    :param list_scenes: List of SceneInformation from the same day
-    :param max_cloud_percentage: Max percentage of clouds of the scene
-    :return: True, if the scenes are less-equal max_cloud_percentage. Otherwise returns False
-    """
-    percentages_of_cloud = [scene_information.cloud_coverage for scene_information in list_scenes]
-    mean_cloud_percentage = sum(percentages_of_cloud)/len(list_scenes)
-
-    if mean_cloud_percentage > max_cloud_percentage:
-        return False
-    print(f'Mean percentage of clouds: {mean_cloud_percentage}')
-    return True
-
-
 def old_get_simple_metadata_from_image(image_path: str):
     with rasterio.open(image_path) as dataset:
         transform_string = f'{dataset.transform.c}, {dataset.transform.a}, {dataset.transform.b}, {dataset.transform.f}, {dataset.transform.d}, {dataset.transform.e}'
@@ -280,8 +263,7 @@ def get_scenes_ids_from_microsoft_planetary(
                         # The list of scenes from the same day having data in this point,
                         # means that there is no more scenes from the same day.
                         if len(list_scenes_from_same_day) > 0:
-                            if check_percentage_of_cloud_coverage(list_scenes_from_same_day, max_cloud_coverage):
-                                list_scene_ids.append(list_scenes_from_same_day)
+                            list_scene_ids.append(list_scenes_from_same_day)
                             list_scenes_from_same_day = []
                         # Checks if the current Scene is bigger-equal to the number of days gap between images
                         elif (last_scene_date - scene_date_acquisition).days >= days_gap:

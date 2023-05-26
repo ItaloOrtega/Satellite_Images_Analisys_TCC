@@ -56,6 +56,7 @@ def open_multiple_images(
             Image(
                 data=image_bands,
                 mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
+                cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
                 metadata=metadata,
                 id=get_image_id(source.source_name, index_name, acquisition_date),
                 source=source
@@ -65,7 +66,7 @@ def open_multiple_images(
     return opened_images
 
 
-def calculate_images_indices(list_images: List[Image], index: Index, geometry: Polygon):
+def calculate_images_indices(list_images: List[Image], index: Index, geometry: Polygon, max_cloud_coverage: float):
     """
     Calculate images with index applied on it.
 
@@ -79,8 +80,9 @@ def calculate_images_indices(list_images: List[Image], index: Index, geometry: P
         )
     list_images_with_index = []
     for image in list_images:
-        image_with_index = get_image_with_index(image, index, area_geometry)
-        list_images_with_index.append(image_with_index)
+        image_with_index = get_image_with_index(image, index, area_geometry, max_cloud_coverage)
+        if image_with_index is not None:
+            list_images_with_index.append(image_with_index)
 
     return list_images_with_index
 

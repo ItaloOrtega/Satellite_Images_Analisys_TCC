@@ -3,7 +3,7 @@ from expression import Expression_Parser as ExpressionParser
 from rasterio.features import geometry_mask
 from shapely import Polygon
 
-from models import Image, Index, SourceBands
+from models import Image, Index, SourceBands, SourceType
 
 LENGTH_OF_SHAPE = 3
 _MATRICES_AXIS = 0
@@ -147,6 +147,18 @@ def __interpolate_bands(bands: numpy.ndarray, source: SourceBands):
     return bands_interpolated
 
 
+def calculate_cloud_mask(cloud_mask: numpy.array):
+    new_cloud_mask = cloud_mask
+    new_cloud_mask[new_cloud_mask == 7] = 0
+    new_cloud_mask[new_cloud_mask == 8] = 0
+    new_cloud_mask[new_cloud_mask == 9] = 0
+    new_cloud_mask[(new_cloud_mask <= 6) | (new_cloud_mask == 10) | (new_cloud_mask == 11)] = 255
+    valid_pixels_count = numpy.count_nonzero(new_cloud_mask == 255)
+    percentage_of_cloud = 100 - (valid_pixels_count/(cloud_mask.shape[0]*cloud_mask.shape[1]))*100
+    print(f'Percentage of clouds = {percentage_of_cloud}')
+    return new_cloud_mask, percentage_of_cloud
+
+
 def create_image_mask(image: Image, geometry: Polygon):
     """
     Creates a no-data mask from the image data.
@@ -221,7 +233,7 @@ def filter_interpolate_image_data(
     return image_with_index
 
 
-def get_image_with_index(image: Image, index: Index, geometry: Polygon) -> Image:
+def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Image:
     """
     Get image with index applied on it, with a no-data mask add it.
 
@@ -231,14 +243,22 @@ def get_image_with_index(image: Image, index: Index, geometry: Polygon) -> Image
     :return: Image with the index applied and the no-data mask
     """
 
-    image_with_index = calculate_image_index(index.name, image.create_bands_vars())
+    band_vars = image.create_bands_vars()
 
-    filtered_image_with_index = filter_interpolate_image_data(image_with_index, index, image.source)
+    image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(band_vars['cloud_mask'])
 
-    image.data = filtered_image_with_index
+    if percentage_of_clouds <= max_cloud_coverage:
 
-    image.metadata.update({'count': filtered_image_with_index.shape[_MATRICES_AXIS], 'dtype': 'float32'})
+        image_with_index = calculate_image_index(index.name, image.create_bands_vars())
 
-    image.mask = create_image_mask(image, geometry)
+        filtered_image_with_index = filter_interpolate_image_data(image_with_index, index, image.source)
 
-    return image
+        image.data = filtered_image_with_index
+
+        image.metadata.update({'count': filtered_image_with_index.shape[_MATRICES_AXIS], 'dtype': 'float32'})
+
+        image.mask = create_image_mask(image, geometry)
+
+        return image
+
+    return None

@@ -207,6 +207,7 @@ class SourceBands:
     green: str
     red: str
     nir: str
+    cloud_mask: str
     c1: float
     c2: float
     epsg: CRS
@@ -224,12 +225,13 @@ class SourceType(Enum):
         green='b2',
         red='b1',
         nir='b4',
+        cloud_mask='b5',
         c1=6,
         c2=7.5,
         epsg=CRS(32722),
         width=10980,
         height=10980,
-        bands_sequence=['B04', 'B03', 'B02', 'B08'],
+        bands_sequence=['B04', 'B03', 'B02', 'B08', 'SCL'],
         band_interp_values={'red': [0, 4000], 'green': [0, 4000], 'blue': [0, 4000]},
     )
 
@@ -239,6 +241,7 @@ class SourceType(Enum):
         green='b2',
         red='b1',
         nir='b4',
+        cloud_mask='b5',
         c1=6,
         c2=7.5,
         epsg=CRS(32722),
@@ -254,6 +257,7 @@ class SourceType(Enum):
 class Image:
     data: numpy.array
     mask: numpy.array
+    cloud_mask: numpy.array
     metadata: Profile
     id: str
     source: SourceBands
@@ -264,7 +268,7 @@ class Image:
         :return:
         """
         _BAND_POSITION = 1
-        band_keys = ['red', 'green', 'blue', 'nir', 'c1', 'c2']
+        band_keys = ['red', 'green', 'blue', 'nir', 'cloud_mask', 'c1', 'c2']
         source_dict = self.source.__dict__
         band_vars = {}
         for key in band_keys:
