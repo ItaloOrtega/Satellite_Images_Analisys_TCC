@@ -66,6 +66,7 @@ def get_images_with_index_from_middle_point(
     list_scenes_informations = get_scenes_urls(list_scenes, source_bands)
     print(f'Time to create VRTs for images = {time.perf_counter() - time_start} s')
 
+    print(f'Creating {len(list_scenes_informations)} images ...')
     time_start = time.perf_counter()
     opened_images = open_multiple_images(
         list_scenes_informations, area_from_geom, image_size, source_bands.value, index_type.name
@@ -73,6 +74,6 @@ def get_images_with_index_from_middle_point(
     print(
         f'Time to open all {len(opened_images)} images from {sum([len(scenes_same_day) for scenes_same_day in list_scenes_informations])}= {time.perf_counter() - time_start} s')
 
-    images_indices = calculate_images_indices(opened_images, index_type, area_from_geom)
+    images_indices = calculate_images_indices(opened_images, index_type, area_from_geom, max_cloud_coverage)
 
     create_images_files(images_indices, color_map_object, file_extension)

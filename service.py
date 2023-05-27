@@ -35,37 +35,44 @@ def open_multiple_images(
     """
     opened_images = []
     for scenes_from_same_day in list_scenes_informations:
+        image_bands = None
+        metadata = None
         opened_datasets = []
         time_start_opening = time.perf_counter()
         geometry = epsg_transform(
             geometry=area_geom, from_epsg=_ORIGINAL_POLYGON_EPSG, to_epsg=source.epsg
         )
         for scene_information in scenes_from_same_day:
-            dataset = open_single_image(scene_information.url, image_size, geometry)
-            opened_datasets.append(dataset)
+            dataset = open_single_image(scene_information.url, image_size, geometry, scene_information.scene_id)
+            # dataset will be None if something wrong happened while opening a Scene
+            if dataset is not None:
+                opened_datasets.append(dataset)
         if len(opened_datasets) > 1:  # Case for more than one Scene from the same day
             image_bands, metadata = merge_datasets(opened_datasets, geometry)
             for dataset in opened_datasets:
                 dataset.close()
-        else:  # Case when only one image from that day
+        elif len(opened_datasets) == 1:  # Case when only one image from that day
             image_bands = opened_datasets[_FIRST_POSITION].read()
             metadata = opened_datasets[_FIRST_POSITION].profile
             opened_datasets[_FIRST_POSITION].close()
-        acquisition_date = scenes_from_same_day[_FIRST_POSITION].acquisition_date
-        opened_images.append(
-            Image(
-                data=image_bands,
-                mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
-                metadata=metadata,
-                id=get_image_id(source.source_name, index_name, acquisition_date),
-                source=source
+
+        if image_bands is not None and metadata is not None:
+            acquisition_date = scenes_from_same_day[_FIRST_POSITION].acquisition_date
+            opened_images.append(
+                Image(
+                    data=image_bands,
+                    mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
+                    cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
+                    metadata=metadata,
+                    id=get_image_id(source.source_name, index_name, acquisition_date),
+                    source=source
+                )
             )
-        )
         print(f'Time to OPEN and merge {len(scenes_from_same_day)} images from the same day = {time.perf_counter() - time_start_opening} s')
     return opened_images
 
 
-def calculate_images_indices(list_images: List[Image], index: Index, geometry: Polygon):
+def calculate_images_indices(list_images: List[Image], index: Index, geometry: Polygon, max_cloud_coverage: float):
     """
     Calculate images with index applied on it.
 
@@ -79,8 +86,9 @@ def calculate_images_indices(list_images: List[Image], index: Index, geometry: P
         )
     list_images_with_index = []
     for image in list_images:
-        image_with_index = get_image_with_index(image, index, area_geometry)
-        list_images_with_index.append(image_with_index)
+        image_with_index = get_image_with_index(image, index, area_geometry, max_cloud_coverage)
+        if image_with_index is not None:
+            list_images_with_index.append(image_with_index)
 
     return list_images_with_index
 

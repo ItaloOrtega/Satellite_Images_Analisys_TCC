@@ -179,7 +179,7 @@ def windowed_read_dataset(
     return to_dataset(data, profile, mask)
 
 
-def open_single_image(image_url: str, image_size: int, geometry: Polygon) -> DatasetReader:
+def open_single_image(image_url: str, image_size: int, geometry: Polygon, scene_id: str) -> DatasetReader:
     """
     Opens a single image with rasterio.open()
 
@@ -190,13 +190,19 @@ def open_single_image(image_url: str, image_size: int, geometry: Polygon) -> Dat
     """
     with rasterio.Env(aws_unsigned=True):
         with rasterio.open(image_url) as dataset:
-            windowed_dataset = windowed_read_dataset(
-                dataset=dataset,
-                geom=geometry,
-                no_data_value=_NODATA_VALUE,
-                first_mask_position=_FIRST_MASK_POSITION,
-                image_size=image_size
-            )
+            try:
+                windowed_dataset = windowed_read_dataset(
+                    dataset=dataset,
+                    geom=geometry,
+                    no_data_value=_NODATA_VALUE,
+                    first_mask_position=_FIRST_MASK_POSITION,
+                    image_size=image_size
+                )
+            except Exception as e:
+                print(f'Error when opening the scene {scene_id}.')
+                rasterio.Env().cache = None
+                return None
+
     rasterio.Env().cache = None
 
     return windowed_dataset

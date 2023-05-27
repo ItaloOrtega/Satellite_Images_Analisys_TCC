@@ -207,11 +207,14 @@ class SourceBands:
     green: str
     red: str
     nir: str
+    cloud_mask: str
     c1: float
     c2: float
     epsg: CRS
     width: int
     height: int
+    mask_width: int
+    mask_height: int
     bands_sequence: List[str]
     extra_bands: Optional[List[ExtraBands]] = None
     band_interp_values: Optional[dict] = None
@@ -224,12 +227,15 @@ class SourceType(Enum):
         green='b2',
         red='b1',
         nir='b4',
+        cloud_mask='b5',
         c1=6,
         c2=7.5,
         epsg=CRS(32722),
         width=10980,
         height=10980,
-        bands_sequence=['B04', 'B03', 'B02', 'B08'],
+        mask_width=5490,
+        mask_height=5490,
+        bands_sequence=['B04', 'B03', 'B02', 'B08', 'SCL'],
         band_interp_values={'red': [0, 4000], 'green': [0, 4000], 'blue': [0, 4000]},
     )
 
@@ -239,11 +245,14 @@ class SourceType(Enum):
         green='b2',
         red='b1',
         nir='b4',
+        cloud_mask='b5',
         c1=6,
         c2=7.5,
         epsg=CRS(32722),
         width=10980,
         height=10980,
+        mask_width=5490,
+        mask_height=5490,
         bands_sequence=['B03', 'B13', 'B04', 'B14', 'B08', 'B09'],
         extra_bands=[ExtraBands('thermal_rad', 'b5'), ExtraBands('surface_temp', 'b6')],
         band_interp_values={'red': [5140, 20560], 'green': [5140, 20560], 'blue': [5140, 20560]},
@@ -254,6 +263,7 @@ class SourceType(Enum):
 class Image:
     data: numpy.array
     mask: numpy.array
+    cloud_mask: numpy.array
     metadata: Profile
     id: str
     source: SourceBands
@@ -264,7 +274,7 @@ class Image:
         :return:
         """
         _BAND_POSITION = 1
-        band_keys = ['red', 'green', 'blue', 'nir', 'c1', 'c2']
+        band_keys = ['red', 'green', 'blue', 'nir', 'cloud_mask', 'c1', 'c2']
         source_dict = self.source.__dict__
         band_vars = {}
         for key in band_keys:
@@ -346,4 +356,9 @@ class IndexExpressionType(Enum):
         expression='(green-red)/(green+red-blue)',
         color_maps=_SINGLE_BAND_LIST_OF_COLOR_MAP,
         ceiling_value=1,
+    )
+    raw = Index(
+        name='raw',
+        expression='red, blue, green, nir',
+        color_maps=['raw'],
     )
