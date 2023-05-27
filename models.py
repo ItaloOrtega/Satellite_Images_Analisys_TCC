@@ -213,6 +213,8 @@ class SourceBands:
     epsg: CRS
     width: int
     height: int
+    mask_width: int
+    mask_height: int
     bands_sequence: List[str]
     extra_bands: Optional[List[ExtraBands]] = None
     band_interp_values: Optional[dict] = None
@@ -231,6 +233,8 @@ class SourceType(Enum):
         epsg=CRS(32722),
         width=10980,
         height=10980,
+        mask_width=5490,
+        mask_height=5490,
         bands_sequence=['B04', 'B03', 'B02', 'B08', 'SCL'],
         band_interp_values={'red': [0, 4000], 'green': [0, 4000], 'blue': [0, 4000]},
     )
@@ -247,6 +251,8 @@ class SourceType(Enum):
         epsg=CRS(32722),
         width=10980,
         height=10980,
+        mask_width=5490,
+        mask_height=5490,
         bands_sequence=['B03', 'B13', 'B04', 'B14', 'B08', 'B09'],
         extra_bands=[ExtraBands('thermal_rad', 'b5'), ExtraBands('surface_temp', 'b6')],
         band_interp_values={'red': [5140, 20560], 'green': [5140, 20560], 'blue': [5140, 20560]},

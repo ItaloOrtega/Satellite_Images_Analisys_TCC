@@ -77,7 +77,8 @@ def get_band_urls(scene_id: str, source_band: SourceType) -> List[str]:
     return [f'{tile_path}/{band}.tif' for band in sentinel_bands_list]
 
 
-def build_vrt_band(band_url: str, band_index: int, width, height):
+def build_vrt_band(band_url: str, band_index: int, source_width: int, source_height: int, final_width: int,
+                   final_height: int):
     """
     Creates a band VRT from one scene's band.
 
@@ -92,9 +93,9 @@ def build_vrt_band(band_url: str, band_index: int, width, height):
         <SimpleSource>
           <SourceFilename relativeToVRT="0">{band_url}</SourceFilename>
           <SourceBand>1</SourceBand>
-          <SourceProperties RasterXSize="{width}" RasterYSize="{height}" DataType="UInt16" BlockXSize="1024" BlockYSize="1024" />
-          <SrcRect xOff="0" yOff="0" xSize="{width}" ySize="{height}" />
-          <DstRect xOff="0" yOff="0" xSize="{width}" ySize="{height}" />
+          <SourceProperties RasterXSize="{source_width}" RasterYSize="{source_width}" DataType="UInt16" BlockXSize="1024" BlockYSize="1024" />
+          <SrcRect xOff="0" yOff="0" xSize="{source_width}" ySize="{source_height}" />
+          <DstRect xOff="0" yOff="0" xSize="{final_width}" ySize="{final_height}" />
         </SimpleSource>
     </VRTRasterBand>
     '''
@@ -115,9 +116,20 @@ def build_vrt(scene_information: SceneInformation, source_bands: SourceType) -> 
     geo_transform = f'<GeoTransform> {transform_string} </GeoTransform>'
     srs = f'<SRS dataAxisToSRSAxisMapping="1,2">{source_bands.value.epsg}</SRS>'
 
-    bands = '\n'.join(
-        [build_vrt_band(band, index + 1, source_bands.value.width, source_bands.value.height) for index, band in
-         enumerate(band_urls)])
+    bands_vrts = []
+    for index, band in enumerate(band_urls):
+        final_width = source_bands.value.width
+        final_height = source_bands.value.height
+        if 'SCL' in band:
+            source_width = source_bands.value.mask_width
+            source_height = source_bands.value.mask_height
+        else:
+            source_width = final_width
+            source_height = final_height
+        band_vrt_url = build_vrt_band(band, index + 1, source_width, source_height, final_width, final_height)
+        bands_vrts.append(band_vrt_url)
+
+    bands = '\n'.join(bands_vrts)
 
     scene_information.url = f'''
     <VRTDataset rasterXSize="{source_bands.value.width}" rasterYSize="{source_bands.value.height}">
@@ -234,7 +246,7 @@ def get_scenes_ids_from_microsoft_planetary(
             if len(resp_json['features']) == 0:
                 print('There is no Scenes!')
                 raise ValueError
-            for scene_data in resp_json['features']:
+            for scene_index, scene_data in enumerate(resp_json['features']):
                 scene_date_acquisition = datetime.datetime.strptime(
                     scene_data['properties']['datetime'][:10], "%Y-%m-%d"
                 ).date()
@@ -249,33 +261,30 @@ def get_scenes_ids_from_microsoft_planetary(
                             scene_data['properties']['eo:cloud_cover']
                         )
                     )
-                else:  # Checks to see if the images are from the same day
-                    if (last_scene_date - scene_date_acquisition).days == 0:
-                        list_scenes_from_same_day.append(
-                            SceneInformation(
-                                scene_data['id'],
-                                scene_data['geometry'],
-                                scene_date_acquisition,
-                                scene_data['properties']['eo:cloud_cover']
-                            )
+                elif (last_scene_date - scene_date_acquisition).days == 0:
+                    list_scenes_from_same_day.append(
+                        SceneInformation(
+                            scene_data['id'],
+                            scene_data['geometry'],
+                            scene_date_acquisition,
+                            scene_data['properties']['eo:cloud_cover']
                         )
-                    else:
-                        # The list of scenes from the same day having data in this point,
-                        # means that there is no more scenes from the same day.
-                        if len(list_scenes_from_same_day) > 0:
-                            list_scene_ids.append(list_scenes_from_same_day)
-                            list_scenes_from_same_day = []
-                        # Checks if the current Scene is bigger-equal to the number of days gap between images
-                        elif (last_scene_date - scene_date_acquisition).days >= days_gap:
-                            list_scenes_from_same_day.append(
-                                SceneInformation(
-                                    scene_data['id'],
-                                    scene_data['geometry'],
-                                    scene_date_acquisition,
-                                    scene_data['properties']['eo:cloud_cover']
-                                )
-                            )
-                            last_scene_date = scene_date_acquisition
+                    )
+                else:
+                    # The list of scenes from the same day having data in this point,
+                    # means that there is no more scenes from the same day.
+                    if len(list_scenes_from_same_day) > 0:
+                        list_scene_ids.append(list_scenes_from_same_day)
+                    list_scenes_from_same_day = [SceneInformation(
+                        scene_data['id'],
+                        scene_data['geometry'],
+                        scene_date_acquisition,
+                        scene_data['properties']['eo:cloud_cover']
+                    )]
+                    last_scene_date = scene_date_acquisition
+
+                if scene_index+1 == len(resp_json['features']):
+                    list_scene_ids.append(list_scenes_from_same_day)
             try:
                 # Token to get subsequent images
                 token_cursor = resp_json['links'][_FIRST_POSITION]['body']['token']
@@ -287,4 +296,19 @@ def get_scenes_ids_from_microsoft_planetary(
         else:
             print('Error! Something wrong happened while handling the request')
 
-    return list_scene_ids
+    list_scene_ids.reverse()
+
+    if days_gap == 1:
+        gaped_scene_list = list_scene_ids
+
+    else:
+        gaped_scene_list = []
+        for scene_index, scenes_same_day in enumerate(list_scene_ids):
+            if scene_index <= len(list_scene_ids) - 1:
+                if scene_index == _FIRST_POSITION:
+                    gaped_scene_list.append(scenes_same_day)
+                else:
+                    if (scenes_same_day[_FIRST_POSITION].acquisition_date - list_scene_ids[scene_index-1][_FIRST_POSITION].acquisition_date).days >= days_gap:
+                        gaped_scene_list.append(scenes_same_day)
+
+    return gaped_scene_list

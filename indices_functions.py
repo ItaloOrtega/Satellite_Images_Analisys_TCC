@@ -1,3 +1,5 @@
+from typing import Optional
+
 import numpy
 from expression import Expression_Parser as ExpressionParser
 from rasterio.features import geometry_mask
@@ -149,13 +151,10 @@ def __interpolate_bands(bands: numpy.ndarray, source: SourceBands):
 
 def calculate_cloud_mask(cloud_mask: numpy.array):
     new_cloud_mask = cloud_mask
-    new_cloud_mask[new_cloud_mask == 7] = 0
-    new_cloud_mask[new_cloud_mask == 8] = 0
-    new_cloud_mask[new_cloud_mask == 9] = 0
     new_cloud_mask[(new_cloud_mask <= 6) | (new_cloud_mask == 10) | (new_cloud_mask == 11)] = 255
+    new_cloud_mask[new_cloud_mask <= 9] = 0
     valid_pixels_count = numpy.count_nonzero(new_cloud_mask == 255)
     percentage_of_cloud = 100 - (valid_pixels_count/(cloud_mask.shape[0]*cloud_mask.shape[1]))*100
-    print(f'Percentage of clouds = {percentage_of_cloud}')
     return new_cloud_mask, percentage_of_cloud
 
 
@@ -233,7 +232,7 @@ def filter_interpolate_image_data(
     return image_with_index
 
 
-def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Image:
+def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Optional[Image]:
     """
     Get image with index applied on it, with a no-data mask add it.
 
@@ -260,5 +259,7 @@ def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_clou
         image.mask = create_image_mask(image, geometry)
 
         return image
+
+    print(f"Image {image.id} has clouds over the threshold, {percentage_of_clouds}.")
 
     return None
