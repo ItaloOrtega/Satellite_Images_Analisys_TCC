@@ -236,7 +236,7 @@ class SourceType(Enum):
         mask_width=5490,
         mask_height=5490,
         bands_sequence=['B04', 'B03', 'B02', 'B08', 'SCL'],
-        band_interp_values={'red': [0, 4000], 'green': [0, 4000], 'blue': [0, 4000]},
+        band_interp_values={'red': [0, 10000], 'green': [0, 10000], 'blue': [0, 10000]},
     )
 
     landsat = SourceBands(
