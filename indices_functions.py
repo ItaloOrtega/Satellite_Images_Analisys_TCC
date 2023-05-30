@@ -5,7 +5,8 @@ from expression import Expression_Parser as ExpressionParser
 from rasterio.features import geometry_mask
 from shapely import Polygon
 
-from models import Image, Index, SourceBands, SourceType
+from bands_interpolator import __interpolate_bands
+from models import Image, Index, SourceBands
 
 LENGTH_OF_SHAPE = 3
 _MATRICES_AXIS = 0
@@ -115,40 +116,6 @@ def __interpolate_values(bands: numpy.ndarray, ceiling_value: int):
     return result
 
 
-def __interpolate_one_band(band: numpy.ndarray, source: SourceBands, color_name: str):
-    """
-    Interpolates one color band to the correct values for presentation of its color.
-
-    :param band: Image Bands with the dbx applied
-    :param source: Where the image bands comes from
-    :param color_name: The color of that band
-    :return: The bands with the values interpolated
-    """
-
-    interpolation_value = source.band_interp_values[color_name]
-    if interpolation_value is None:
-        return band
-
-    band_interpolated = numpy.interp(band, interpolation_value, [0, 255])
-    return band_interpolated
-
-
-def __interpolate_bands(bands: numpy.ndarray, source: SourceBands):
-    """
-    Interpolates the RGB bands to the correct values for presentation.
-
-    :param bands: Image Bands with the dbx applied
-    :param source: Where the image bands comes from
-    :return: The bands with the values interpolated
-    """
-
-    bands_interpolated = numpy.zeros(bands.shape)
-    bands_interpolated[0] = __interpolate_one_band(bands[0], source, 'red')
-    bands_interpolated[1] = __interpolate_one_band(bands[1], source, 'green')
-    bands_interpolated[2] = __interpolate_one_band(bands[2], source, 'blue')
-    return bands_interpolated
-
-
 def calculate_cloud_mask(cloud_mask: numpy.array):
     new_cloud_mask = cloud_mask
     new_cloud_mask[(new_cloud_mask <= 6) | (new_cloud_mask == 10) | (new_cloud_mask == 11)] = 255
@@ -239,6 +206,7 @@ def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_clou
     :param image: Image object with numpy array and metadata
     :param index: Index to be applied in the original Image
     :param geometry: Polygon geometry of the image area
+    :param max_cloud_coverage: Max of percentage of cloud of the scene
     :return: Image with the index applied and the no-data mask
     """
 
