@@ -193,6 +193,7 @@ class SceneInformation:
     geometry: dict
     acquisition_date: datetime.date
     cloud_coverage: float
+    transform_values: List[float]
     url: Optional[str] = None
 
     def get_bounds_from_geometry(self):
