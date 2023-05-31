@@ -116,13 +116,28 @@ def __interpolate_values(bands: numpy.ndarray, ceiling_value: int):
     return result
 
 
-def calculate_cloud_mask(cloud_mask: numpy.array):
-    new_cloud_mask = cloud_mask
-    new_cloud_mask[(new_cloud_mask <= 6) | (new_cloud_mask == 10) | (new_cloud_mask == 11)] = 255
-    new_cloud_mask[new_cloud_mask <= 9] = 0
-    valid_pixels_count = numpy.count_nonzero(new_cloud_mask == 255)
-    percentage_of_cloud = 100 - (valid_pixels_count/(cloud_mask.shape[0]*cloud_mask.shape[1]))*100
-    return new_cloud_mask, percentage_of_cloud
+def calculate_cloud_mask(band_vars: dict, source: SourceBands):
+
+    new_cloud_mask = band_vars['cloud_mask']
+    new_cloud_mask[new_cloud_mask <= 6] = 255
+    new_cloud_mask[new_cloud_mask <= 11] = 0
+
+    rgb_interpolated = __interpolate_bands(
+        bands=numpy.asarray([band_vars['red'], band_vars['green'], band_vars['blue']]), source=source
+    )
+
+    white_values_mask = (rgb_interpolated >= 160).sum(axis=0)
+
+    white_values_mask[white_values_mask != 3] = 255
+    white_values_mask[white_values_mask == 3] = 0
+
+    final_cloud_mask = new_cloud_mask+white_values_mask
+    final_cloud_mask[final_cloud_mask <= 255] = 0
+    final_cloud_mask[final_cloud_mask > 255] = 255
+
+    valid_pixels_count = numpy.count_nonzero(final_cloud_mask == 255)
+    percentage_of_cloud = 100 - (valid_pixels_count/(final_cloud_mask.shape[0]*final_cloud_mask.shape[1]))*100
+    return final_cloud_mask, percentage_of_cloud
 
 
 def create_image_mask(image: Image, geometry: Polygon):
@@ -212,7 +227,11 @@ def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_clou
 
     band_vars = image.create_bands_vars()
 
-    image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(band_vars['cloud_mask'])
+    if 0 in [color_band.max() for color_band in list(band_vars.values())[:4]]:
+        print(f"Image {image.id} has no valid values.")
+        return None
+
+    image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(band_vars, image.source)
 
     if percentage_of_clouds <= max_cloud_coverage:
 
