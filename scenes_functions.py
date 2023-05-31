@@ -288,6 +288,7 @@ def get_scenes_ids_from_microsoft_planetary(
             try:
                 # Token to get subsequent images
                 token_cursor = resp_json['links'][_FIRST_POSITION]['body']['token']
+                last_scene_date = None
                 if token_cursor is None or token_cursor[:4] != 'next':
                     token_cursor = None
             except (KeyError, IndexError):
@@ -303,12 +304,16 @@ def get_scenes_ids_from_microsoft_planetary(
 
     else:
         gaped_scene_list = []
+        index_position = 1
         for scene_index, scenes_same_day in enumerate(list_scene_ids):
             if scene_index <= len(list_scene_ids) - 1:
                 if scene_index == _FIRST_POSITION:
                     gaped_scene_list.append(scenes_same_day)
                 else:
-                    if (scenes_same_day[_FIRST_POSITION].acquisition_date - list_scene_ids[scene_index-1][_FIRST_POSITION].acquisition_date).days >= days_gap:
+                    if (scenes_same_day[_FIRST_POSITION].acquisition_date - list_scene_ids[scene_index-index_position][_FIRST_POSITION].acquisition_date).days >= days_gap:
                         gaped_scene_list.append(scenes_same_day)
+                        index_position = 1
+                    else:
+                        index_position += 1
 
     return gaped_scene_list
