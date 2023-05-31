@@ -15,25 +15,30 @@ _WIDTH_POSITION = 1
 _HEIGHT_POSITION = 0
 _NODATA_VALUE = 0
 
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
+s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
 
 def old_get_simple_metadata_from_image(image_path: str):
-    with rasterio.open(image_path) as dataset:
-        transform_string = f'{dataset.transform.c}, {dataset.transform.a}, {dataset.transform.b}, {dataset.transform.f}, {dataset.transform.d}, {dataset.transform.e}'
-        dataset.close()
+    with rasterio.Env(aws_unsigned=True):
+        with rasterio.open(image_path) as dataset:
+            transform_string = f'{dataset.transform.c}, {dataset.transform.a}, {dataset.transform.b}, {dataset.transform.f}, {dataset.transform.d}, {dataset.transform.e}'
+            dataset.close()
     return transform_string
 
 
-def get_transform_from_scene(scene_information: SceneInformation, source_bands: SourceBands):
+def get_transform_from_scene(scene_information: SceneInformation):
     """
     Gets the transform from the original geometry of the Scene.
 
     :param scene_information: Scene data and information
-    :param source_bands: Source Bands
     :return: Transform as string of the Scene
     """
-    _geom_polygon = shape(epsg_transform(scene_information.geometry, 4326, source_bands.epsg))
-    dataset_transform = rasterio.transform.from_bounds(*_geom_polygon.bounds, source_bands.width, source_bands.height)
-    transform_string = f'{dataset_transform.c}, {dataset_transform.a}, {dataset_transform.b}, {dataset_transform.f}, {dataset_transform.d}, {dataset_transform.e}'
+    transform_keys = ['a', 'b', 'c', 'd', 'e', 'f']
+    transform_dict = dict(zip(transform_keys, scene_information.transform_values))
+    transform_string = f"{transform_dict['c']}, {transform_dict['a']}, {transform_dict['b']}, {transform_dict['f']}, {transform_dict['d']}, {transform_dict['e']}"
 
     return transform_string
 
@@ -111,7 +116,7 @@ def build_vrt(scene_information: SceneInformation, source_bands: SourceType) -> 
     :return: Scene URL with the Bands
     """
     band_urls = get_band_urls(scene_information.scene_id, source_bands)
-    transform_string = get_transform_from_scene(scene_information, source_bands.value)
+    transform_string = get_transform_from_scene(scene_information)
     # transform_string = old_get_simple_metadata_from_image(band_urls[0])
     geo_transform = f'<GeoTransform> {transform_string} </GeoTransform>'
     srs = f'<SRS dataAxisToSRSAxisMapping="1,2">{source_bands.value.epsg}</SRS>'
@@ -258,7 +263,8 @@ def get_scenes_ids_from_microsoft_planetary(
                             scene_data['id'],
                             scene_data['geometry'],
                             scene_date_acquisition,
-                            scene_data['properties']['eo:cloud_cover']
+                            scene_data['properties']['eo:cloud_cover'],
+                            scene_data['assets']['AOT']['proj:transform']
                         )
                     )
                 elif (last_scene_date - scene_date_acquisition).days == 0:
@@ -267,7 +273,8 @@ def get_scenes_ids_from_microsoft_planetary(
                             scene_data['id'],
                             scene_data['geometry'],
                             scene_date_acquisition,
-                            scene_data['properties']['eo:cloud_cover']
+                            scene_data['properties']['eo:cloud_cover'],
+                            scene_data['assets']['AOT']['proj:transform']
                         )
                     )
                 else:
@@ -279,7 +286,8 @@ def get_scenes_ids_from_microsoft_planetary(
                         scene_data['id'],
                         scene_data['geometry'],
                         scene_date_acquisition,
-                        scene_data['properties']['eo:cloud_cover']
+                        scene_data['properties']['eo:cloud_cover'],
+                        scene_data['assets']['AOT']['proj:transform']
                     )]
                     last_scene_date = scene_date_acquisition
 
