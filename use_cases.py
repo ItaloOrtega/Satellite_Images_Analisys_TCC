@@ -4,7 +4,7 @@ from datetime import datetime
 from geom_functions import create_a_square
 from models import SourceType, IndexExpressionType, ColorMaps
 from scenes_functions import get_scenes_ids_from_microsoft_planetary, get_scenes_urls
-from service import open_multiple_images, calculate_images_indices, create_images_files
+from service import open_multiple_images, create_images_files, create_images_datasets
 
 
 def get_images_with_index_from_middle_point(
@@ -50,6 +50,10 @@ def get_images_with_index_from_middle_point(
         print('Color Map is not available to this index')
         raise ValueError
 
+    if index_type == IndexExpressionType.rgb.value:
+        print('RGB is not valid index.')
+        raise ValueError
+
     area_from_geom = create_a_square(max_distance_meters, point_latitude, point_longitude)
     date_format = "%Y-%m-%d"
     try:
@@ -74,6 +78,8 @@ def get_images_with_index_from_middle_point(
     print(
         f'Time to open all {len(opened_images)} images from {sum([len(scenes_same_day) for scenes_same_day in list_scenes_informations])}= {time.perf_counter() - time_start} s')
 
-    images_indices = calculate_images_indices(opened_images, index_type, area_from_geom, max_cloud_coverage)
+    index_images, rgb_images = create_images_datasets(opened_images, index_type, area_from_geom, max_cloud_coverage)
 
-    create_images_files(images_indices, color_map_object, file_extension)
+    create_images_files(index_images, color_map_object, file_extension)
+
+    create_images_files(rgb_images, ColorMaps.truecolor.value, file_extension)
