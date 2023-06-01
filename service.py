@@ -6,9 +6,9 @@ import numpy
 from shapely import Polygon
 
 from geom_functions import epsg_transform
-from image_functions import open_single_image, merge_datasets, get_image_id, create_image_with_rasterio
+from image_functions import open_single_image, merge_datasets, create_image_with_rasterio, get_scene_id
 from models import SceneInformation, SourceBands, Image, Index, ColorMap
-from indices_functions import get_image_with_index
+from indices_functions import get_image_with_index, get_rgb_image, calculate_cloud_mask
 
 _FIRST_POSITION = 0
 _LINES_INDEX = 1
@@ -64,7 +64,7 @@ def open_multiple_images(
                     mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
                     cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
                     metadata=metadata,
-                    id=get_image_id(source.source_name, index_name, acquisition_date),
+                    id=get_scene_id(source.source_name, acquisition_date),
                     source=source
                 )
             )
@@ -72,9 +72,9 @@ def open_multiple_images(
     return opened_images
 
 
-def calculate_images_indices(list_images: List[Image], index: Index, geometry: Polygon, max_cloud_coverage: float):
+def create_images_datasets(list_images: List[Image], index: Index, geometry: Polygon, max_cloud_coverage: float):
     """
-    Calculate images with index applied on it.
+    Calculate the dataset to be analised, creating RGB images and images with the choosen Index.
 
     :param list_images: List of Images
     :param index: Index to be applied on the images
@@ -84,13 +84,28 @@ def calculate_images_indices(list_images: List[Image], index: Index, geometry: P
     area_geometry = epsg_transform(
             geometry=geometry, from_epsg=_ORIGINAL_POLYGON_EPSG, to_epsg=list_images[_FIRST_POSITION].source.epsg
         )
+
+    rgb_images_list = []
+    valid_scenes = []
+    for scene_image in list_images:
+        rgb_image = get_rgb_image(scene_image, area_geometry, max_cloud_coverage)
+        if rgb_image is not None:
+            rgb_image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(rgb_image.cloud_mask, rgb_image.data)
+            if percentage_of_clouds <= max_cloud_coverage:
+                rgb_images_list.append(rgb_image)
+                scene_image.cloud_mask = rgb_image.cloud_mask
+                scene_image.mask = rgb_image.mask
+                valid_scenes.append(scene_image)
+            else:
+                print(f'Scene {scene_image.id} has clouds over the threshold, {percentage_of_clouds}.')
+
     list_images_with_index = []
-    for image in list_images:
-        image_with_index = get_image_with_index(image, index, area_geometry, max_cloud_coverage)
+    for image in valid_scenes:
+        image_with_index = get_image_with_index(image, index)
         if image_with_index is not None:
             list_images_with_index.append(image_with_index)
 
-    return list_images_with_index
+    return list_images_with_index, rgb_images_list
 
 
 def create_images_files(list_images: List[Image], color_map: ColorMap, file_extension: str):

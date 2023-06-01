@@ -1,3 +1,4 @@
+from copy import copy
 from typing import Optional
 
 import numpy
@@ -6,7 +7,7 @@ from rasterio.features import geometry_mask
 from shapely import Polygon
 
 from bands_interpolator import __interpolate_bands
-from models import Image, Index, SourceBands
+from models import Image, Index, SourceBands, IndexExpressionType
 
 LENGTH_OF_SHAPE = 3
 _MATRICES_AXIS = 0
@@ -116,15 +117,20 @@ def __interpolate_values(bands: numpy.ndarray, ceiling_value: int):
     return result
 
 
-def calculate_cloud_mask(band_vars: dict, source: SourceBands):
+def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array):
+    """
+    Calculates a cloud mask using the SCL band mask
 
-    new_cloud_mask = band_vars['cloud_mask']
+    :param original_cloud_mask:
+    :param rgb_data:
+    :return:
+    """
+
+    new_cloud_mask = copy(original_cloud_mask)
     new_cloud_mask[new_cloud_mask <= 6] = 255
     new_cloud_mask[new_cloud_mask <= 11] = 0
 
-    rgb_interpolated = __interpolate_bands(
-        bands=numpy.asarray([band_vars['red'], band_vars['green'], band_vars['blue']]), source=source
-    )
+    rgb_interpolated = copy(rgb_data)
 
     white_values_mask = (rgb_interpolated >= 160).sum(axis=0)
 
@@ -214,7 +220,84 @@ def filter_interpolate_image_data(
     return image_with_index
 
 
-def get_image_with_index(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Optional[Image]:
+def get_rgb_image(scene_image: Image, geometry: Polygon, source: SourceBands):
+    """
+    Creates an RGB image and mask from the Scene image.
+
+    :param scene_image: Scene image object contaning all the bands
+    :param geometry: Polygon geometry of the image area
+    :param source: Source of the Scenes
+    :return: RGB Image object
+    """
+    _LINES_INDEX = 1
+    _COLUMNS_INDEX = 2
+
+    rgb_index = IndexExpressionType.rgb.value
+
+    rgb_image_metadata = copy(scene_image.metadata)
+
+    band_vars = scene_image.create_bands_vars()
+
+    if 0 in [color_band.max() for color_band in list(band_vars.values())[:4]]:
+        print(f"Image {scene_image.id} has no valid values.")
+        return None
+
+    image_with_index = calculate_image_index(rgb_index.name, band_vars)
+
+    filtered_image_with_index = filter_interpolate_image_data(image_with_index, rgb_index, scene_image.source)
+
+    rgb_image_metadata.update({'count': filtered_image_with_index.shape[_MATRICES_AXIS], 'dtype': 'float32'})
+
+    rgb_image = Image(
+        metadata=rgb_image_metadata,
+        data=filtered_image_with_index,
+        mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
+        cloud_mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
+        id=f'IMG_{rgb_index.name.upper()}_{scene_image.id}',
+        source=source
+    )
+
+    rgb_image.mask = create_image_mask(rgb_image, geometry)
+
+    return rgb_image
+
+
+def get_image_with_index(original_image: Image, index: Index) -> Optional[Image]:
+    """
+    Get image with index applied on it, with a no-data mask add it.
+
+    :param original_image: Scene object with numpy array and metadata
+    :param index: Index to be applied in the original Image
+    :return: Image with the index applied and the no-data mask
+    """
+
+    band_vars = original_image.create_bands_vars()
+
+    index_image_metadata = original_image.metadata
+
+    if 0 in [color_band.max() for color_band in list(band_vars.values())[:4]]:
+        print(f"Image {original_image.id} has no valid values.")
+        return None
+
+    image_with_index = calculate_image_index(index.name, original_image.create_bands_vars())
+
+    filtered_image_with_index = filter_interpolate_image_data(image_with_index, index, original_image.source)
+
+    index_image_metadata.update({'count': filtered_image_with_index.shape[_MATRICES_AXIS], 'dtype': 'float32'})
+
+    index_image = Image(
+        metadata=index_image_metadata,
+        data=filtered_image_with_index,
+        mask=original_image.mask,
+        cloud_mask=original_image.cloud_mask,
+        id=f'IMG_{index.name.upper()}_{original_image.id}',
+        source=original_image.source
+    )
+
+    return index_image
+
+
+def get_image_with_index_old(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Optional[Image]:
     """
     Get image with index applied on it, with a no-data mask add it.
 

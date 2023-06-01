@@ -45,16 +45,15 @@ def to_dataset(data: numpy.ndarray, metadata: dict, mask: numpy.ndarray) -> Data
     return memory_file.open()
 
 
-def get_image_id(source: str, index_name: str, acquisition_date: datetime.date):
+def get_scene_id(source: str, acquisition_date: datetime.date):
     """
-    Creates a Image ID from the opened scenes, using the acquisition date and the index being applied.
+    Creates a Scene ID from the opened scenes, using the acquisition date.
 
     :param source: Source of the Scene
-    :param index_name: Name of the Index that will be applied in the image
     :param acquisition_date: Date of the acquisition of the Scene that the image is in
-    :return: Image ID of the merged scenes
+    :return: Scene ID of the merged scenes
     """
-    return f"{source.replace('-', '_').upper()}_{index_name.upper()}_{str(acquisition_date).replace('-', '_').upper()}"
+    return f"{source.replace('-', '_').upper()}_{str(acquisition_date).replace('-', '_').upper()}"
 
 
 def transform_epsg_image(data: numpy.ndarray, mask: numpy.ndarray, profile: dict, raster_bounds: Tuple,
