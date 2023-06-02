@@ -259,6 +259,7 @@ def get_rgb_image(scene_image: Image, geometry: Polygon, source: SourceBands):
         mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
         cloud_mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
         id=f'IMG_{rgb_index.name.upper()}_{scene_image.id}',
+        acquisition_date=scene_image.acquisition_date,
         source=source
     )
 
@@ -296,6 +297,7 @@ def get_image_with_index(original_image: Image, index: Index) -> Optional[Image]
         mask=original_image.mask,
         cloud_mask=original_image.cloud_mask,
         id=f'IMG_{index.name.upper()}_{original_image.id}',
+        acquisition_date=original_image.acquisition_date,
         source=original_image.source
     )
 

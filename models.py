@@ -265,6 +265,7 @@ class Image:
     data: numpy.array
     mask: numpy.array
     cloud_mask: numpy.array
+    acquisition_date: datetime.date
     metadata: Profile
     id: str
     source: SourceBands

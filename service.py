@@ -20,8 +20,7 @@ def open_multiple_images(
         list_scenes_informations: List[List[SceneInformation]],
         area_geom: Polygon,
         image_size: int,
-        source: SourceBands,
-        index_name: str
+        source: SourceBands
 ) -> List[Image]:
     """
     Open multiple scenes from the same day as Datasets and merge them to become single image.
@@ -30,7 +29,6 @@ def open_multiple_images(
     :param area_geom: Polygon object of the area geometry
     :param image_size: Size of the image in pixels
     :param source: Source of the Images
-    :param index_name: Index name
     :return: List of Images from the Scenes of the same day
     """
     opened_images = []
@@ -65,6 +63,7 @@ def open_multiple_images(
                     cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
                     metadata=metadata,
                     id=get_scene_id(source.source_name, acquisition_date),
+                    acquisition_date=acquisition_date,
                     source=source
                 )
             )

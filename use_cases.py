@@ -73,7 +73,7 @@ def get_images_with_index_from_middle_point(
     print(f'Creating {len(list_scenes_informations)} images ...')
     time_start = time.perf_counter()
     opened_images = open_multiple_images(
-        list_scenes_informations, area_from_geom, image_size, source_bands.value, index_type.name
+        list_scenes_informations, area_from_geom, image_size, source_bands.value
     )
     print(
         f'Time to open all {len(opened_images)} images from {sum([len(scenes_same_day) for scenes_same_day in list_scenes_informations])}= {time.perf_counter() - time_start} s')
