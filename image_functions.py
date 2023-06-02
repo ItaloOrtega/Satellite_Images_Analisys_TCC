@@ -221,6 +221,7 @@ def create_image_with_rasterio(image: Image, color_map: ColorMap, file_extension
     raster_image = numpy.append(image_with_color_map, [image.mask], axis=0)
     with MemoryFile() as memfile:
         if file_extension == 'tiff':
+            raster_image = numpy.append(raster_image, [image.cloud_mask], axis=0)
             metadata = image.metadata
             metadata.update(count=raster_image.shape[0], dtype=raster_image.dtype)
             if color_map.type == 'raw':

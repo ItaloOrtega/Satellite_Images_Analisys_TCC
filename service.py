@@ -90,7 +90,7 @@ def create_images_datasets(list_images: List[Image], index: Index, geometry: Pol
     for scene_image in list_images:
         rgb_image = get_rgb_image(scene_image, area_geometry, max_cloud_coverage)
         if rgb_image is not None:
-            rgb_image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(rgb_image.cloud_mask, rgb_image.data)
+            rgb_image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(rgb_image.cloud_mask, rgb_image.data, rgb_image.mask)
             if percentage_of_clouds <= max_cloud_coverage:
                 rgb_images_list.append(rgb_image)
                 scene_image.cloud_mask = rgb_image.cloud_mask
