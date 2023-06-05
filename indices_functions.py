@@ -265,6 +265,13 @@ def get_rgb_image(scene_image: Image, geometry: Polygon, source: SourceBands):
 
     rgb_image.mask = create_image_mask(rgb_image, geometry)
 
+    valid_pixels_count = numpy.count_nonzero(rgb_image.mask == 255)
+    percentage_of_valid_pixels = 100 - (valid_pixels_count / (rgb_image.mask.shape[0] * rgb_image.mask.shape[1])) * 100
+
+    if percentage_of_valid_pixels < 80.0:
+        print(f'Image {rgb_image.id} have insufficient pixels for analyzes.')
+        return None
+
     return rgb_image
 
 
