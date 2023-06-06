@@ -144,7 +144,7 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
     final_cloud_mask += image_mask
 
     final_cloud_mask[final_cloud_mask == 255] = 0
-    final_cloud_mask[final_cloud_mask > 255] = 255
+    final_cloud_mask[final_cloud_mask > 0] = 255
 
     valid_pixels_count = numpy.count_nonzero(final_cloud_mask == 255)
     percentage_of_cloud = 100 - (valid_pixels_count/(final_cloud_mask.shape[0]*final_cloud_mask.shape[1]))*100
@@ -173,7 +173,7 @@ def create_image_mask(image: Image, geometry: Polygon):
     res_values_sum = res_mask + data.sum(axis=_MATRICES_AXIS)
 
     res_values_sum[res_values_sum == 255] = 0
-    res_values_sum[res_values_sum != 0] = 255
+    res_values_sum[res_values_sum > 0] = 255
 
     res_mask = res_values_sum.astype('uint8')
 

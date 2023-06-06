@@ -291,6 +291,12 @@ class Image:
 
         return band_vars
 
+@dataclass
+class MaskedImage:
+    data: numpy.ma.masked_array
+    acquisition_date: datetime.date
+    id: str
+
 
 @dataclass
 class Index:
