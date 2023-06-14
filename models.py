@@ -261,6 +261,13 @@ class SourceType(Enum):
 
 
 @dataclass
+class ChangedData:
+    changed_mask: numpy.array
+    changed_date: str
+    changed_area: float
+    geojson: List[dict]
+
+@dataclass
 class Image:
     data: numpy.array
     mask: numpy.array

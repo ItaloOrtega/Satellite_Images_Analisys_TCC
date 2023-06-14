@@ -3,7 +3,9 @@ from typing import Optional
 
 import numpy
 from expression import Expression_Parser as ExpressionParser
+from matplotlib import pyplot as plt
 from rasterio.features import geometry_mask
+from scipy.ndimage import binary_dilation
 from shapely import Polygon
 
 from bands_interpolator import __interpolate_bands
@@ -74,8 +76,8 @@ def calculate_vari(red: numpy.array, green: numpy.array, blue: numpy.array):
     return numpy.divide(numpy.subtract(green, red), numpy.subtract(numpy.add(green, red), blue))
 
 
-def calculate_raw(red: numpy.array, green: numpy.array, blue: numpy.array, nir: numpy.array):
-    return numpy.asarray([red, blue, green, nir])
+def calculate_raw(red: numpy.array, green: numpy.array, blue: numpy.array, nir: numpy.array, cloud_mask: numpy.array):
+    return numpy.asarray([red, blue, green, nir, cloud_mask])
 
 
 INDEX_FUNCS = {
@@ -134,10 +136,14 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
 
     white_values_mask = (rgb_interpolated >= 160).sum(axis=0)
 
+    plt.imshow(white_values_mask, cmap='Greys')
+    plt.title(f'cloud mask 2')
+    plt.show()
+
     white_values_mask[white_values_mask != 3] = 255
     white_values_mask[white_values_mask == 3] = 0
 
-    final_cloud_mask = new_cloud_mask+white_values_mask
+    final_cloud_mask = new_cloud_mask + white_values_mask
     final_cloud_mask[final_cloud_mask <= 255] = 0
     final_cloud_mask[final_cloud_mask > 255] = 255
 
@@ -146,9 +152,20 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
     final_cloud_mask[final_cloud_mask == 255] = 0
     final_cloud_mask[final_cloud_mask > 0] = 255
 
-    valid_pixels_count = numpy.count_nonzero(final_cloud_mask == 255)
-    percentage_of_cloud = 100 - (valid_pixels_count/(final_cloud_mask.shape[0]*final_cloud_mask.shape[1]))*100
-    return final_cloud_mask, percentage_of_cloud
+    structuring_element = numpy.array([[1, 1, 1],
+                                       [1, 1, 1],
+                                       [1, 1, 1]])
+
+    dilated_cloud_mask = binary_dilation(final_cloud_mask.astype('bool').__invert__(), structure=structuring_element)
+
+    dilated_cloud_mask = dilated_cloud_mask.astype('uint8')
+    dilated_cloud_mask[dilated_cloud_mask == 0] = 255
+    dilated_cloud_mask[dilated_cloud_mask == 1] = 0
+
+    valid_pixels_count = numpy.count_nonzero(dilated_cloud_mask == 255)
+    percentage_of_cloud = 100 - (
+                valid_pixels_count / (dilated_cloud_mask.shape[0] * dilated_cloud_mask.shape[1])) * 100
+    return dilated_cloud_mask, percentage_of_cloud
 
 
 def create_image_mask(image: Image, geometry: Polygon):
@@ -256,8 +273,9 @@ def get_rgb_image(scene_image: Image, geometry: Polygon, source: SourceBands):
     rgb_image = Image(
         metadata=rgb_image_metadata,
         data=filtered_image_with_index,
-        mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
-        cloud_mask=numpy.ones((filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
+        mask=numpy.ones(
+            (filtered_image_with_index.shape[_LINES_INDEX], filtered_image_with_index.shape[_COLUMNS_INDEX])) * 255,
+        cloud_mask=band_vars['cloud_mask'],
         id=f'IMG_{rgb_index.name.upper()}_{scene_image.id}',
         acquisition_date=scene_image.acquisition_date,
         source=source
@@ -266,7 +284,8 @@ def get_rgb_image(scene_image: Image, geometry: Polygon, source: SourceBands):
     rgb_image.mask = create_image_mask(rgb_image, geometry)
 
     valid_pixels_count = numpy.count_nonzero(rgb_image.mask == 255)
-    percentage_of_invalid_pixels = 100 - (valid_pixels_count / (rgb_image.mask.shape[0] * rgb_image.mask.shape[1])) * 100
+    percentage_of_invalid_pixels = 100 - (
+                valid_pixels_count / (rgb_image.mask.shape[0] * rgb_image.mask.shape[1])) * 100
 
     if percentage_of_invalid_pixels > 20.0:
         print(f'Image {rgb_image.id} have insufficient pixels for analyzes.')
@@ -311,7 +330,8 @@ def get_image_with_index(original_image: Image, index: Index) -> Optional[Image]
     return index_image
 
 
-def get_image_with_index_old(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Optional[Image]:
+def get_image_with_index_old(image: Image, index: Index, geometry: Polygon, max_cloud_coverage: float) -> Optional[
+    Image]:
     """
     Get image with index applied on it, with a no-data mask add it.
 
@@ -331,7 +351,6 @@ def get_image_with_index_old(image: Image, index: Index, geometry: Polygon, max_
     image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(band_vars, image.source)
 
     if percentage_of_clouds <= max_cloud_coverage:
-
         image_with_index = calculate_image_index(index.name, image.create_bands_vars())
 
         filtered_image_with_index = filter_interpolate_image_data(image_with_index, index, image.source)

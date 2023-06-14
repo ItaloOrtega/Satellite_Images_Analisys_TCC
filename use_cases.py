@@ -15,7 +15,6 @@ def get_images_with_index_from_middle_point(
         point_longitude: float,
         start_date_str: str,
         end_date_str: str,
-        file_extension: str,
         days_gap: int = 1,
         max_distance_meters: int = 5000,
         image_size: int = 256,
@@ -80,6 +79,14 @@ def get_images_with_index_from_middle_point(
 
     index_images, rgb_images = create_images_datasets(opened_images, index_type, area_from_geom, max_cloud_coverage)
 
-    create_images_files(index_images, color_map_object, file_extension)
+    create_images_files(index_images, ColorMaps.raw.value, 'tiff')
 
-    create_images_files(rgb_images, ColorMaps.truecolor.value, file_extension)
+    create_images_files(rgb_images, ColorMaps.truecolor.value, 'tiff')
+
+    if index == 'raw' or color_map == 'raw':
+        print('Not able to create PNG images.')
+
+    else:
+        create_images_files(index_images, color_map_object, 'png')
+
+        create_images_files(rgb_images, ColorMaps.truecolor.value, 'png')

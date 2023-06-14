@@ -189,7 +189,7 @@ def open_single_image(image_url: str, image_size: int, geometry: Polygon, scene_
     :return: Dataset of the opened image
     """
     with rasterio.Env(aws_unsigned=True):
-        with rasterio.open(image_url) as dataset:
+        with rasterio.open(image_url, num_threads=8) as dataset:
             with WarpedVRT(dataset) as vrt:
                 try:
                     windowed_dataset = windowed_read_dataset(
