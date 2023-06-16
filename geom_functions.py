@@ -2,7 +2,7 @@ from typing import Union
 
 from rasterio import CRS
 from rasterio.warp import transform_geom
-from shapely import Polygon
+from shapely import Polygon, MultiPolygon
 from shapely.geometry import shape, mapping
 
 
@@ -32,7 +32,7 @@ def epsg_transform(
     else:
         to_crs = to_epsg
 
-    if isinstance(geometry, Polygon):
+    if isinstance(geometry, Polygon) or isinstance(geometry, MultiPolygon):
         return shape(transform_geom(from_crs, to_crs, mapping(geometry)))
 
     return transform_geom(from_crs, to_crs, geometry)

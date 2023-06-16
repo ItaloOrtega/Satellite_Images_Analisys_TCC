@@ -1,8 +1,10 @@
+import json
 import os
 import time
-from typing import List
+from typing import List, Union
 
 import numpy
+from rasterio import MemoryFile
 from shapely import Polygon
 
 from geom_functions import epsg_transform
@@ -122,3 +124,25 @@ def create_images_files(list_images: List[Image], color_map: ColorMap, file_exte
         image_file = create_image_with_rasterio(image, color_map, file_extension)
         with open(f'images/{image.id}.{file_extension}', 'wb') as file:
             file.write(image_file)
+
+
+def create_analisys_files(dir: str, file: Union[numpy.array, dict], file_extension: str = 'png'):
+    if file_extension == 'png':
+        with MemoryFile() as memfile:
+            with memfile.open(
+                    driver=file_extension,
+                    count=file.shape[0],
+                    height=file.shape[1],
+                    width=file.shape[2],
+                    dtype=file.dtype,
+                    nodata=0,
+            ) as dst:
+                dst.write(file)
+            image_obj = memfile.read()
+
+        with open(f'images/{dir}.{file_extension}', 'wb') as outputfile:
+            outputfile.write(image_obj)
+
+    else:
+        with open(f'images/{dir}.{file_extension}', 'w') as outputfile:
+            outputfile.write(json.dumps(file))

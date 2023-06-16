@@ -1,5 +1,5 @@
 from copy import copy
-from typing import Optional
+from typing import Optional, List
 
 import numpy
 from expression import Expression_Parser as ExpressionParser
@@ -166,6 +166,14 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
     percentage_of_cloud = 100 - (
                 valid_pixels_count / (dilated_cloud_mask.shape[0] * dilated_cloud_mask.shape[1])) * 100
     return dilated_cloud_mask, percentage_of_cloud
+
+
+def create_grey_scale_img_from_rgb(initial_rgb_image: Image, list_mask: List[numpy.array]):
+    gray_scale_band = numpy.dot(initial_rgb_image.data.transpose(1, 2, 0), [0.2989, 0.5870, 0.1140])
+    for mask in list_mask:
+        gray_scale_band[mask != 0] = 0
+    gray_scale_img = numpy.asarray([gray_scale_band, gray_scale_band, gray_scale_band], dtype='uint8')
+    return gray_scale_img
 
 
 def create_image_mask(image: Image, geometry: Polygon):

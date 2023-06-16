@@ -1,28 +1,34 @@
 import datetime
 import io
+import os
 from collections import namedtuple, defaultdict
 from copy import copy
 from typing import List
 
-import rasterio
+import matplotlib
 from area import area
-from dateutil import relativedelta
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from rasterio import transform, MemoryFile
 from scipy.ndimage import binary_dilation, binary_erosion
 from skimage import measure
 import numpy
 from affine import Affine
 from matplotlib import pyplot as plt
-from rasterio.features import shapes, rasterize
-from shapely import Polygon, intersects
+from rasterio.features import rasterize
+from shapely import Polygon, intersects, MultiPolygon
 from shapely.geometry import mapping
 
 from geom_functions import epsg_transform
-from image_functions import create_image_with_rasterio
+from indices_functions import create_grey_scale_img_from_rgb
 from models import Image, MaskedImage, ColorMaps
+from service import create_analisys_files
 
 ImageInfo = namedtuple('ImageInfo', ['acquisition_date', 'mean', 'stdev', 'max', 'min'])
-DifferenceMask = namedtuple('DifferenceMask', ['difference_date', 'lost_mask', 'lost_area'])
+DifferenceMask = namedtuple('DifferenceMask', [
+    'difference_date', 'lost_mask', 'lost_area', 'lost_area_geojson', 'lost_area_image'
+])
+
+plt.rcParams['figure.constrained_layout.use'] = True
 
 FIRST_POSITION = 0
 SECOND_POSITION = 1
@@ -59,7 +65,8 @@ def create_polygon_from_image_contour(image_contour_array: numpy.array, original
     return polygon_contour
 
 
-def plot_means_stdev_max_min(list_images_info: List[ImageInfo], list_dates: List[datetime.date]):
+def plot_means_stdev_max_min(list_images_info: List[ImageInfo]):
+    list_dates = [img.acquisition_date for img in list_images_info]
     image_info_sub_lists = defaultdict(list)
 
     for img_info in list_images_info:
@@ -78,10 +85,10 @@ def plot_means_stdev_max_min(list_images_info: List[ImageInfo], list_dates: List
         sub_list_maxs = []
         sub_list_mins = []
         for img_info in img_info_sub_list[1]:
-            sub_list_mean.append(img_info.mean)
-            sub_list_stdevs = [img_info.stdev]
-            sub_list_maxs = [img_info.max]
-            sub_list_mins = [img_info.min]
+            sub_list_mean.append(img_info.data.mean())
+            sub_list_stdevs = [numpy.std(img_info.data)]
+            sub_list_maxs = [img_info.data.max()]
+            sub_list_mins = [img_info.data.min()]
         list_means.append(sum(sub_list_mean) / len(sub_list_mean))
         list_stdevs.append(sum(sub_list_stdevs) / len(sub_list_stdevs))
         list_maxs.append(sum(sub_list_maxs) / len(sub_list_maxs))
@@ -89,7 +96,7 @@ def plot_means_stdev_max_min(list_images_info: List[ImageInfo], list_dates: List
 
     figsize = (len(list_dates) * 0.5, 6)
 
-    plt.figure(figsize=figsize)
+    plt.figure(figsize=figsize, layout="constrained")
     plt.plot(months_list, list_means, marker='o', label='Means Values')
     plt.plot(months_list, list_stdevs, marker='o', label='Standart Deviation Values')
     plt.plot(months_list, list_maxs, marker='o', label='Max Values')
@@ -100,7 +107,6 @@ def plot_means_stdev_max_min(list_images_info: List[ImageInfo], list_dates: List
     plt.legend()
     plt.title('Images Informations throught months')
     plt.xticks(months_list, rotation=45)
-    plt.tight_layout()
     with io.BytesIO() as memf:
         extent = plt.gcf().get_window_extent()
         extent = extent.transformed(plt.gcf().dpi_scale_trans.inverted())
@@ -116,7 +122,7 @@ def plot_means_stdev_max_min(list_images_info: List[ImageInfo], list_dates: List
 
 
 def plot_afect_area(deforestation_area_array: numpy.array, recovered_area_array: numpy.array,
-                    original_geometry: Polygon, image_size: int):
+                    original_geometry: Polygon, image_size: int, initial_date: datetime, final_date: datetime):
     pixel_area = area(mapping(original_geometry)) / (image_size * image_size)
     deforestation_area = ((deforestation_area_array != 0).sum() * pixel_area) / 10000
     recovered_area = ((recovered_area_array != 0).sum() * pixel_area) / 10000
@@ -132,8 +138,7 @@ def plot_afect_area(deforestation_area_array: numpy.array, recovered_area_array:
     plt.xlabel('Affected Area')
     plt.ylabel('Affected Area Rate in Hectare (Ha)')
     plt.legend()
-    plt.title('Affected Hectares of the Area from X -> Y')
-    plt.tight_layout()
+    plt.title(f'Affected Hectares of the Area from {initial_date} -> {final_date}')
 
     with io.BytesIO() as memf:
         extent = plt.gcf().get_window_extent()
@@ -289,15 +294,16 @@ def calculate_list_difference_between_days(masked_images_list: List[MaskedImage]
 
             loss_count = (final_lost_mask != 0).sum()
 
+            lost_area_geojson = epsg_transform(mapping(MultiPolygon(final_valid_geometries_list)), 32722, 4326)
+
             difference_mask_list.append(DifferenceMask(
                 difference_mask[change_date_index],
                 difference_mask[lost_mask_index],
-                loss_count * pixel_area
+                loss_count * pixel_area,
+                lost_area_geojson,
+                None
             )
             )
-
-        print(
-            f'{difference_mask[change_date_index]}: Loss = {loss_count} | Loss Area = {abs(loss_count * pixel_area)} m²')
 
     return difference_mask_list
 
@@ -314,11 +320,11 @@ def plot_deforestation_area_throught_dates(lost_mask_list: List[DifferenceMask])
     sorted_image_info_sub_lists = sorted(image_info_sub_lists.items())
 
     months_list = ['{}-{}'.format(*img_info[FIRST_POSITION]) for img_info in sorted_image_info_sub_lists]
-    lost_areas_hac = [round(sum(img_info[SECOND_POSITION])/10000, 2) for img_info in sorted_image_info_sub_lists]
+    lost_areas_hac = [round(sum(img_info[SECOND_POSITION]) / 10000, 2) for img_info in sorted_image_info_sub_lists]
 
     figsize = (len(months_list) * 0.9, len(lost_areas_hac) * 0.7)
 
-    plt.figure(figsize=figsize)
+    plt.figure(figsize=figsize, layout="constrained")
     plt.plot(months_list, lost_areas_hac, marker='o', color='red', label='Lost Area in Hectare (Ha)')
 
     for x, y in zip(months_list, lost_areas_hac):
@@ -334,7 +340,6 @@ def plot_deforestation_area_throught_dates(lost_mask_list: List[DifferenceMask])
     plt.legend()
     plt.title('Lost Area to Deforestation Throught Months')
     plt.xticks(months_list, rotation=45)
-    plt.tight_layout()
 
     with io.BytesIO() as memf:
         extent = plt.gcf().get_window_extent()
@@ -350,22 +355,63 @@ def plot_deforestation_area_throught_dates(lost_mask_list: List[DifferenceMask])
     return figure_array
 
 
-def filter_most_changed_areas(lost_mask_list: List[DifferenceMask]):
+def get_most_changed_area_figures(lost_mask_list: List[DifferenceMask], initial_rgb_image: Image):
     ordered_mask_list = sorted(lost_mask_list, key=lambda x: x.lost_area, reverse=True)
     max_list_size = 10
     if len(ordered_mask_list) < max_list_size:
         max_list_size = int(len(ordered_mask_list) * 0.15)
-    final_lost_mask_list = ordered_mask_list[:max_list_size]
+    selected_lost_mask_list = ordered_mask_list[:max_list_size]
+
+    final_lost_mask_list = []
+
+    for lost_mask in selected_lost_mask_list:
+        gray_scale_img = create_grey_scale_img_from_rgb(initial_rgb_image, [lost_mask.lost_mask])
+        deforestation_mask = copy(lost_mask.lost_mask)
+        deforestation_mask[deforestation_mask != 0] = 0.05
+        img_deforestation_with_color_map = ColorMaps.contrast_original.value.apply_color_map(
+            numpy.asarray([deforestation_mask]))
+        bool_deforestation_mask = deforestation_mask.astype('bool').__invert__()
+        img_deforestation_with_color_map[
+            numpy.asarray([bool_deforestation_mask, bool_deforestation_mask, bool_deforestation_mask])] = 0
+
+        afected_area_image = numpy.append(
+            (gray_scale_img + img_deforestation_with_color_map),
+            numpy.ones((1, 256, 256), dtype='uint8') * 255, axis=0)
+
+        fig, ax = plt.subplots()
+        ax.imshow(numpy.transpose(afected_area_image, (1, 2, 0)).astype('uint8'))
+
+        legend_elements = [matplotlib.patches.Patch(facecolor='red', label='Deforestaded Area')]
+        ax.legend(handles=legend_elements, loc='lower right')
+        ax.axis('off')
+
+        with io.BytesIO() as memf:
+            extent = plt.gcf().get_window_extent()
+            extent = extent.transformed(plt.gcf().dpi_scale_trans.inverted())
+            plt.gcf().savefig(memf, format='PNG', bbox_inches=extent)
+            memf.seek(0)
+            with MemoryFile(memf) as memfile:
+                with memfile.open() as dataset:
+                    figure_array = dataset.read()
+            memf.close()
+            plt.close()
+
+        final_lost_mask_list.append(DifferenceMask(
+            lost_mask.difference_date,
+            lost_mask.lost_mask,
+            lost_mask.lost_area,
+            lost_mask.lost_area_geojson,
+            figure_array
+        ))
 
     return final_lost_mask_list
 
 
 def create_afected_area_image(initial_rgb_image: Image, interpolated_deforestation_area: numpy.array,
                               interpolated_recovered_area: numpy.array):
-    gray_scale_band = numpy.dot(initial_rgb_image.data.transpose(1, 2, 0), [0.2989, 0.5870, 0.1140])
-    gray_scale_band[interpolated_recovered_area != 0] = 0
-    gray_scale_band[interpolated_deforestation_area != 0] = 0
-    gray_scale_img = numpy.asarray([gray_scale_band, gray_scale_band, gray_scale_band], dtype='uint8')
+    gray_scale_img = create_grey_scale_img_from_rgb(
+        initial_rgb_image, [interpolated_recovered_area, interpolated_deforestation_area]
+    )
 
     mask_deforestation = interpolated_deforestation_area == 0
     mask_recoverage = interpolated_recovered_area == 0
@@ -382,19 +428,68 @@ def create_afected_area_image(initial_rgb_image: Image, interpolated_deforestati
         (gray_scale_img + img_recovered_with_color_map + img_deforestation_with_color_map),
         numpy.ones((1, 256, 256), dtype='uint8') * 255, axis=0)
 
-    return afected_area_image
+    fig, ax = plt.subplots(nrows=2, ncols=1, height_ratios=[3, 0.2], width_ratios=[0.5], layout="constrained")
+
+    custom_cmap = (matplotlib.colors.LinearSegmentedColormap.from_list("custom", ['red', 'yellow', 'green']))
+    divider = make_axes_locatable(ax[0])
+    cax = divider.append_axes("bottom", size="5%", pad=0.05)
+    ax[1].axis('off')
+    fig.colorbar(matplotlib.cm.ScalarMappable(cmap=custom_cmap),
+                 cax=cax, orientation='horizontal', label="Most Deforestade Area to Most Recovered Area", )
+
+    cax.set_xticks([])
+
+    ax[0].imshow(numpy.transpose(afected_area_image, (1, 2, 0)))
+    ax[0].axis('off')
+
+    with io.BytesIO() as memf:
+        extent = plt.gcf().get_window_extent()
+        extent = extent.transformed(plt.gcf().dpi_scale_trans.inverted())
+        plt.gcf().savefig(memf, format='PNG', bbox_inches=extent)
+        memf.seek(0)
+        with MemoryFile(memf) as memfile:
+            with memfile.open() as dataset:
+                figure_array = dataset.read()
+        memf.close()
+        plt.close()
+
+    return figure_array
 
 
 def create_afected_area_informations(masked_ndvi_images: List[MaskedImage], initial_rgb_image: Image,
                                      original_geometry: Polygon, image_size: int):
+    fig_means_stdev_max_min = plot_means_stdev_max_min(masked_ndvi_images)
+
+    # os.mkdir('./images/graphs')
+    # os.mkdir('./images/visualizer')
+    # os.mkdir('./images/visualizer/deforestation_areas')
+    create_analisys_files('graphs/means_stdev_max_min_graph', fig_means_stdev_max_min)
+
     interpolated_deforestation_area, interpolated_recovered_area = calculate_afected_area(masked_ndvi_images)
-    fig_affected_area = plot_afect_area(interpolated_deforestation_area, interpolated_recovered_area,
-                                        original_geometry, image_size)
+    initial_date = masked_ndvi_images[FIRST_POSITION].acquisition_date
+    final_date = masked_ndvi_images[-1].acquisition_date
+    fig_affected_area_graph = plot_afect_area(interpolated_deforestation_area, interpolated_recovered_area,
+                                              original_geometry, image_size, initial_date, final_date)
+    create_analisys_files('graphs/affected_area_graph', fig_affected_area_graph)
+
     afected_area_image = create_afected_area_image(initial_rgb_image, interpolated_deforestation_area,
                                                    interpolated_recovered_area)
+    create_analisys_files('visualizer/afected_area_image', afected_area_image)
 
     difference_mask_list = calculate_list_difference_between_days(masked_ndvi_images,
                                                                   initial_rgb_image.metadata.get('transform'),
                                                                   original_geometry, image_size)
 
-    fig_deforestation_area = plot_deforestation_area_throught_dates(difference_mask_list)
+    fig_deforestation_area_graph = plot_deforestation_area_throught_dates(difference_mask_list)
+    create_analisys_files('graphs/deforestation_area_graph', fig_deforestation_area_graph)
+
+    list_deforestation_diff_area_obj = get_most_changed_area_figures(difference_mask_list, initial_rgb_image)
+
+    for index_diff, diff_mask in enumerate(list_deforestation_diff_area_obj):
+        if os.path.exists(f'./images/visualizer/deforestation_areas/{index_diff+1}') is False:
+            os.mkdir(f'./images/visualizer/deforestation_areas/{index_diff+1}')
+        create_analisys_files(
+            f'visualizer/deforestation_areas/{index_diff+1}/lost_area_{index_diff+1}', diff_mask.lost_area_image, 'png')
+        create_analisys_files(
+            f'visualizer/deforestation_areas/{index_diff + 1}/lost_area_{index_diff + 1}_geojson',
+            diff_mask.lost_area_geojson, 'json')
