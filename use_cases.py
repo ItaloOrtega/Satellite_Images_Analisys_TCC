@@ -4,7 +4,9 @@ from datetime import datetime
 from geom_functions import create_a_square
 from models import SourceType, IndexExpressionType, ColorMaps
 from scenes_functions import get_scenes_ids_from_microsoft_planetary, get_scenes_urls
-from service import open_multiple_images, create_images_files, create_images_datasets
+from service import open_multiple_images, create_images_files, create_images_datasets, create_affected_area_information
+
+_FIRST_POSITION = 0
 
 
 def get_images_with_index_from_middle_point(
@@ -78,6 +80,12 @@ def get_images_with_index_from_middle_point(
         f'Time to open all {len(opened_images)} images from {sum([len(scenes_same_day) for scenes_same_day in list_scenes_informations])}= {time.perf_counter() - time_start} s')
 
     index_images, rgb_images = create_images_datasets(opened_images, index_type, area_from_geom, max_cloud_coverage)
+
+    fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
+        list_deforestation_diff_area_obj = create_affected_area_information(index_images, rgb_images[_FIRST_POSITION],
+                                                                            area_from_geom, image_size)
+
+    # TODO: add all images to a PDF file and save locally and zip the files
 
     create_images_files(index_images, ColorMaps.raw.value, 'tiff')
 

@@ -122,10 +122,6 @@ def __interpolate_values(bands: numpy.ndarray, ceiling_value: int):
 def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array, image_mask: numpy.array):
     """
     Calculates a cloud mask using the SCL band mask
-
-    :param original_cloud_mask:
-    :param rgb_data:
-    :return:
     """
 
     new_cloud_mask = copy(original_cloud_mask)
@@ -168,7 +164,11 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
     return dilated_cloud_mask, percentage_of_cloud
 
 
-def create_grey_scale_img_from_rgb(initial_rgb_image: Image, list_mask: List[numpy.array]):
+def create_gray_scale_img_from_rgb(initial_rgb_image: Image, list_mask: List[numpy.array]):
+    """
+    Creates a gray-scale numpy array image to be used as background, and reset the pixel values as 0 if a list of masks
+    is sent.
+    """
     gray_scale_band = numpy.dot(initial_rgb_image.data.transpose(1, 2, 0), [0.2989, 0.5870, 0.1140])
     for mask in list_mask:
         gray_scale_band[mask != 0] = 0
