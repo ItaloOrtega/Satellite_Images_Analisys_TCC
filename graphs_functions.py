@@ -83,6 +83,8 @@ def plot_deforestation_area_throught_dates_figure(months_list: List[str], list_l
     """
     Creates a graph that will show the area lost of deforestation in hectares throught the months
     """
+    if len(months_list) == 1:
+        return None
     figsize = (len(months_list) * 0.9, len(list_lost_areas_hac) * 0.7)
     plt.figure(figsize=figsize, layout="constrained")
     plt.plot(months_list, list_lost_areas_hac, marker='o', color='red', label='Lost Area in Hectare (Ha)')
@@ -160,19 +162,37 @@ def plot_mean_stdev_max_min_figure(
     Creates a graph that will show the mean, max, standart deviation and min values throught the months englobed by the
     date window
     """
-    figsize = (len(months_list) * 0.5, 6)
+    if len(months_list) == 1:
+        area_in_hectare = (
+            list_means[_FIRST_POSITION], list_stdevs[_FIRST_POSITION],
+            list_maxs[_FIRST_POSITION], list_mins[_FIRST_POSITION]
+        )
+        bar_labels = ('Mean', 'Standart Deviation', 'Max', 'Min')
 
-    plt.figure(figsize=figsize, layout="constrained")
-    plt.plot(months_list, list_means, marker='o', label='Means Values')
-    plt.plot(months_list, list_stdevs, marker='o', label='Standart Deviation Values')
-    plt.plot(months_list, list_maxs, marker='o', label='Max Values')
-    plt.plot(months_list, list_mins, marker='o', label='Min Values')
+        plt.bar(
+            bar_labels, area_in_hectare, color=('blue', 'orange', 'green', 'red'),
+            label=bar_labels,
+            align='center'
+        )
+        for i in range(len(area_in_hectare)):
+            plt.annotate('{:.2f}\n'.format(area_in_hectare[i]), xy=(bar_labels[i], area_in_hectare[i]), ha='center',
+                         va='center', fontweight='bold')
+        plt.ylabel('NDVI Images Values Informations')
+        plt.legend()
+    else:
+        figsize = (len(months_list) * 0.5, 6)
 
-    plt.xlabel('Images Months')
-    plt.ylabel('NDVI Images Values Informations')
-    plt.legend()
+        plt.figure(figsize=figsize, layout="constrained")
+        plt.plot(months_list, list_means, marker='o', color='blue', label='Means Values')
+        plt.plot(months_list, list_stdevs, marker='o', color='orange', label='Standart Deviation Values')
+        plt.plot(months_list, list_maxs, marker='o', color='green', label='Max Values')
+        plt.plot(months_list, list_mins, marker='o', color='red', label='Min Values')
+
+        plt.xlabel('Images Months')
+        plt.ylabel('NDVI Images Values Informations')
+        plt.legend()
+        plt.xticks(months_list, rotation=45)
     plt.title('NDVI Images Informations Throught Months')
-    plt.xticks(months_list, rotation=45)
     with io.BytesIO() as memf:
         extent = plt.gcf().get_window_extent()
         extent = extent.transformed(plt.gcf().dpi_scale_trans.inverted())

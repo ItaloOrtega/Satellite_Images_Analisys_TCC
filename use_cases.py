@@ -81,6 +81,10 @@ def get_images_with_index_from_middle_point(
 
     index_images, rgb_images = create_images_datasets(opened_images, index_type, area_from_geom, max_cloud_coverage)
 
+    if len(index_images) < 3:
+        print("Erro! It's necessary more than 2 images to be able to create the analisys")
+        raise ValueError
+
     fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
         list_deforestation_diff_area_obj = create_affected_area_information(index_images, rgb_images[_FIRST_POSITION],
                                                                             area_from_geom, image_size)
@@ -89,7 +93,7 @@ def get_images_with_index_from_middle_point(
 
     create_images_files(index_images, ColorMaps.raw.value, 'tiff')
 
-    create_images_files(rgb_images, ColorMaps.truecolor.value, 'tiff')
+    # create_images_files(rgb_images, ColorMaps.truecolor.value, 'tiff')
 
     if index == 'raw' or color_map == 'raw':
         print('Not able to create PNG images.')

@@ -68,7 +68,7 @@ def create_means_stdev_max_min_plot_figure(list_images_info: List[ImageInfo]):
     image_info_sub_lists = defaultdict(list)
 
     for img_info in list_images_info:
-        image_info_sub_lists[(img_info.acquisition_date.year, img_info.acquisition_date.month)].append(img_info)
+        image_info_sub_lists[(img_info.acquisition_date.year, img_info.acquisition_date.month)].append(copy(img_info))
 
     sorted_image_info_sub_lists = sorted(image_info_sub_lists.items())
 
@@ -83,6 +83,7 @@ def create_means_stdev_max_min_plot_figure(list_images_info: List[ImageInfo]):
         sub_list_maxs = []
         sub_list_mins = []
         for img_info in img_info_sub_list[1]:
+            img_info.data.mask[img_info.data.data < 0] = True
             sub_list_mean.append(img_info.data.mean())
             sub_list_stdevs = [numpy.std(img_info.data)]
             sub_list_maxs = [img_info.data.max()]
@@ -156,8 +157,11 @@ def calculate_afected_area(list_masked_images: List[MaskedImage]):
             initial_green_area = reforestation_image_area
 
     # Reset pixels with less occurences of deforestation/recoverage of areas
-    area_of_deforestation[area_of_deforestation < int(len(list_masked_images) * 0.15)] = 0
-    area_of_reforestation[area_of_reforestation < int(len(list_masked_images) * 0.15)] = 0
+    occurency_threshold = 3
+    if len(list_masked_images) < 10:
+        occurency_threshold = 2
+    area_of_deforestation[area_of_deforestation < occurency_threshold] = 0
+    area_of_reforestation[area_of_reforestation < occurency_threshold] = 0
 
     # Removes areas that was already deforestaded/recovered from the respective mask arrays
     area_of_deforestation[initial_deforestad_area != 0] = 0
@@ -346,7 +350,7 @@ def get_most_changed_area_figures(lost_mask_list: List[DifferenceMask], initial_
     ordered_mask_list = sorted(lost_mask_list, key=lambda x: x.lost_area, reverse=True)
     max_list_size = 10
     if len(ordered_mask_list) < max_list_size:
-        max_list_size = int(len(ordered_mask_list) * 0.15)
+        max_list_size = len(ordered_mask_list)
     selected_lost_mask_list = ordered_mask_list[:max_list_size]
 
     final_lost_mask_list = []
