@@ -132,10 +132,6 @@ def calculate_cloud_mask(original_cloud_mask: numpy.array, rgb_data: numpy.array
 
     white_values_mask = (rgb_interpolated >= 160).sum(axis=0)
 
-    plt.imshow(white_values_mask, cmap='Greys')
-    plt.title(f'cloud mask 2')
-    plt.show()
-
     white_values_mask[white_values_mask != 3] = 255
     white_values_mask[white_values_mask == 3] = 0
 
@@ -171,7 +167,10 @@ def create_gray_scale_img_from_rgb(initial_rgb_image: Image, list_mask: List[num
     """
     gray_scale_band = numpy.dot(initial_rgb_image.data.transpose(1, 2, 0), [0.2989, 0.5870, 0.1140])
     for mask in list_mask:
-        gray_scale_band[mask != 0] = 0
+        usable_mask = mask
+        if len(usable_mask.shape) == 3:
+            usable_mask = usable_mask[_MATRICES_AXIS]
+        gray_scale_band[usable_mask != 0] = 0
     gray_scale_img = numpy.asarray([gray_scale_band, gray_scale_band, gray_scale_band], dtype='uint8')
     return gray_scale_img
 

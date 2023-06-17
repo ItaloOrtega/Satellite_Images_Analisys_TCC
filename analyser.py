@@ -195,8 +195,8 @@ def calculate_list_difference_between_days(masked_images_list: List[MaskedImage]
     print(f'Minimal area = {area_minimal_contour_geometry}')
 
     list_difference_mask = []
-    lost_area = numpy.zeros((image_size, image_size))
-    gain_area = numpy.zeros((image_size, image_size))
+    lost_area = numpy.zeros((1, image_size, image_size))
+    gain_area = numpy.zeros((1, image_size, image_size))
 
     # For Loop to create the difference mask of day X to day X+1
     for img_index, masked_image in enumerate(masked_images_list):
@@ -247,7 +247,7 @@ def calculate_list_difference_between_days(masked_images_list: List[MaskedImage]
 
         bool_lost_mask[bool_lost_mask != 0] = 255
 
-        dilated_lost_mask = binary_dilation(bool_lost_mask.astype('bool'),
+        dilated_lost_mask = binary_dilation(bool_lost_mask[FIRST_POSITION].astype('bool'),
                                             structure=structure_dilation).astype('uint8')
 
         dilated_lost_mask[dilated_lost_mask == 1] = 255
@@ -292,7 +292,7 @@ def calculate_list_difference_between_days(masked_images_list: List[MaskedImage]
 
             final_lost_mask = binary_erosion(result_valid.astype('bool'),
                                              structure=structure_erosion).astype('uint8')
-
+            final_lost_mask = numpy.asarray([final_lost_mask])
             final_lost_mask[difference_mask[lost_mask_index] == 0] = 0
 
             # Counts the pixels of the lost areas
@@ -357,12 +357,13 @@ def get_most_changed_area_figures(lost_mask_list: List[DifferenceMask], initial_
         deforestation_mask = copy(lost_mask.lost_mask)
         # Applys the colormap to the mask
         deforestation_mask[deforestation_mask != 0] = 0.05
-        img_deforestation_with_color_map = ColorMaps.contrast_original.value.apply_color_map(
-            numpy.asarray([deforestation_mask]))
+        img_deforestation_with_color_map = ColorMaps.contrast_original.value.apply_color_map(deforestation_mask)
         bool_deforestation_mask = deforestation_mask.astype('bool').__invert__()
         # Excludes all 0 values, that in the colormap in RGB are 128
         img_deforestation_with_color_map[
-            numpy.asarray([bool_deforestation_mask, bool_deforestation_mask, bool_deforestation_mask])] = 0
+            numpy.concatenate(
+                [bool_deforestation_mask, bool_deforestation_mask, bool_deforestation_mask], axis=0
+            )] = 0
 
         # Creates the image and adds to the list
         affected_area_image_array = numpy.append(
@@ -400,13 +401,17 @@ def create_affected_area_image(
 
     # Applys the wanted color map in the affected area numpy arrays
     img_deforestation_with_color_map = ColorMaps.contrast_original.value.apply_color_map(
-        numpy.asarray([interpolated_deforestation_area]))
+        interpolated_deforestation_area)
     img_recovered_with_color_map = ColorMaps.contrast_original.value.apply_color_map(
-        numpy.asarray([interpolated_recovered_area]))
+        interpolated_recovered_area)
 
     # Removes all values that are 0, which are now is transfomed to 128 in all three bands
-    img_deforestation_with_color_map[numpy.asarray([mask_deforestation, mask_deforestation, mask_deforestation])] = 0
-    img_recovered_with_color_map[numpy.asarray([mask_recoverage, mask_recoverage, mask_recoverage])] = 0
+    img_deforestation_with_color_map[numpy.concatenate(
+        [mask_deforestation, mask_deforestation, mask_deforestation], axis=0
+    )] = 0
+    img_recovered_with_color_map[numpy.concatenate(
+        [mask_recoverage, mask_recoverage, mask_recoverage], axis=0
+    )] = 0
 
     # Adds all the arrays to gray image to finalize it
     afected_area_image = numpy.append(
