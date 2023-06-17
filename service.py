@@ -1,16 +1,22 @@
+import json
 import os
 import time
-from typing import List
+from typing import List, Union
 
 import numpy
+from rasterio import MemoryFile
 from shapely import Polygon
 
+from analyser import create_means_stdev_max_min_plot_figure, create_affected_area_plot_figure, \
+    create_affected_area_image, calculate_list_difference_between_days, create_deforestation_area_throught_dates_figure, \
+    get_most_changed_area_figures, calculate_afected_area
 from geom_functions import epsg_transform
 from image_functions import open_single_image, merge_datasets, create_image_with_rasterio, get_scene_id
-from models import SceneInformation, SourceBands, Image, Index, ColorMap
+from models import SceneInformation, SourceBands, Image, Index, ColorMap, MaskedImage
 from indices_functions import get_image_with_index, get_rgb_image, calculate_cloud_mask
 
 _FIRST_POSITION = 0
+_LAST_POSITION = -1
 _LINES_INDEX = 1
 _COLUMNS_INDEX = 2
 _ORIGINAL_POLYGON_EPSG = 4326
@@ -122,3 +128,68 @@ def create_images_files(list_images: List[Image], color_map: ColorMap, file_exte
         image_file = create_image_with_rasterio(image, color_map, file_extension)
         with open(f'images/{image.id}.{file_extension}', 'wb') as file:
             file.write(image_file)
+
+
+def create_affected_area_information(
+        ndvi_dataset: List[Image], initial_rgb_image: Image, original_geometry: Polygon, image_size: int
+):
+    """
+    Creates all graphs and figures necessary to analyse the user's area, by creating lost and gain green areas in
+     hectares graph, percentage of loss area due to deforestation to the months, and other data.
+    :param ndvi_dataset: List of the NDVI Images
+    :param initial_rgb_image: First RGB Image of the area being analysed
+    :param original_geometry: Original geometry of the area
+    :param image_size: Size being used to create the images
+    :return: Graphs and figures
+    """
+    masked_ndvi_images = []
+    for ndvi_img in ndvi_dataset:
+        masked_ndvi_images.append(ndvi_img.create_masked_array_dataset())
+
+    fig_means_stdev_max_min = create_means_stdev_max_min_plot_figure(masked_ndvi_images)
+
+    interpolated_deforestation_area, interpolated_recovered_area = calculate_afected_area(masked_ndvi_images)
+
+    initial_date = masked_ndvi_images[_FIRST_POSITION].acquisition_date
+    final_date = masked_ndvi_images[_LAST_POSITION].acquisition_date
+
+    fig_affected_area_graph = create_affected_area_plot_figure(
+        interpolated_deforestation_area, interpolated_recovered_area,
+        original_geometry, image_size, initial_date, final_date
+    )
+
+    afected_area_image = create_affected_area_image(initial_rgb_image, interpolated_deforestation_area,
+                                                    interpolated_recovered_area)
+
+    difference_mask_list = calculate_list_difference_between_days(masked_ndvi_images,
+                                                                  initial_rgb_image.metadata.get('transform'),
+                                                                  original_geometry, image_size)
+
+    fig_deforestation_area_graph = create_deforestation_area_throught_dates_figure(difference_mask_list)
+
+    list_deforestation_diff_area_obj = get_most_changed_area_figures(difference_mask_list, initial_rgb_image)
+
+    return fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph,\
+        list_deforestation_diff_area_obj
+
+
+def create_analisys_files(directory_folder: str, file: Union[numpy.array, dict], file_extension: str = 'png'):
+    if file_extension == 'png':
+        with MemoryFile() as memfile:
+            with memfile.open(
+                    driver=file_extension,
+                    count=file.shape[0],
+                    height=file.shape[1],
+                    width=file.shape[2],
+                    dtype=file.dtype,
+                    nodata=0,
+            ) as dst:
+                dst.write(file)
+            image_obj = memfile.read()
+
+        with open(f'images/{directory_folder}.{file_extension}', 'wb') as outputfile:
+            outputfile.write(image_obj)
+
+    else:
+        with open(f'images/{directory_folder}.{file_extension}', 'w') as outputfile:
+            outputfile.write(json.dumps(file))

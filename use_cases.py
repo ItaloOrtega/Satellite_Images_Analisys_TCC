@@ -4,7 +4,9 @@ from datetime import datetime
 from geom_functions import create_a_square
 from models import SourceType, IndexExpressionType, ColorMaps
 from scenes_functions import get_scenes_ids_from_microsoft_planetary, get_scenes_urls
-from service import open_multiple_images, create_images_files, create_images_datasets
+from service import open_multiple_images, create_images_files, create_images_datasets, create_affected_area_information
+
+_FIRST_POSITION = 0
 
 
 def get_images_with_index_from_middle_point(
@@ -15,7 +17,6 @@ def get_images_with_index_from_middle_point(
         point_longitude: float,
         start_date_str: str,
         end_date_str: str,
-        file_extension: str,
         days_gap: int = 1,
         max_distance_meters: int = 5000,
         image_size: int = 256,
@@ -80,6 +81,24 @@ def get_images_with_index_from_middle_point(
 
     index_images, rgb_images = create_images_datasets(opened_images, index_type, area_from_geom, max_cloud_coverage)
 
-    create_images_files(index_images, color_map_object, file_extension)
+    if len(index_images) < 3:
+        print("Erro! It's necessary more than 2 images to be able to create the analisys")
+        raise ValueError
 
-    create_images_files(rgb_images, ColorMaps.truecolor.value, file_extension)
+    fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
+        list_deforestation_diff_area_obj = create_affected_area_information(index_images, rgb_images[_FIRST_POSITION],
+                                                                            area_from_geom, image_size)
+
+    # TODO: add all images to a PDF file and save locally and zip the files
+
+    create_images_files(index_images, ColorMaps.raw.value, 'tiff')
+
+    # create_images_files(rgb_images, ColorMaps.truecolor.value, 'tiff')
+
+    if index == 'raw' or color_map == 'raw':
+        print('Not able to create PNG images.')
+
+    else:
+        create_images_files(index_images, color_map_object, 'png')
+
+        create_images_files(rgb_images, ColorMaps.truecolor.value, 'png')

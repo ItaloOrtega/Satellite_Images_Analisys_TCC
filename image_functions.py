@@ -7,6 +7,7 @@ import rasterio
 from rasterio import MemoryFile, DatasetReader
 from rasterio.enums import Resampling
 from rasterio.merge import merge
+from rasterio.vrt import WarpedVRT
 from rasterio.warp import calculate_default_transform, reproject
 from shapely import Polygon
 
@@ -156,7 +157,7 @@ def windowed_read_dataset(
     time_start = time.perf_counter()
     data = dataset.read(
         window=tile_window,
-        boundless=True,
+        boundless=False,
         out_shape=(output_height, output_width),
         fill_value=no_data_value,
         resampling=Resampling.nearest
@@ -172,7 +173,7 @@ def windowed_read_dataset(
     )
 
     mask = dataset.read_masks(
-        first_mask_position, window=tile_window, boundless=True, out_shape=(output_height, output_width)
+        first_mask_position, window=tile_window, boundless=False, out_shape=(output_height, output_width)
     )
 
     return to_dataset(data, profile, mask)
@@ -188,19 +189,20 @@ def open_single_image(image_url: str, image_size: int, geometry: Polygon, scene_
     :return: Dataset of the opened image
     """
     with rasterio.Env(aws_unsigned=True):
-        with rasterio.open(image_url) as dataset:
-            try:
-                windowed_dataset = windowed_read_dataset(
-                    dataset=dataset,
-                    geom=geometry,
-                    no_data_value=_NODATA_VALUE,
-                    first_mask_position=_FIRST_MASK_POSITION,
-                    image_size=image_size
-                )
-            except Exception as e:
-                print(f'Error when opening the scene {scene_id}.')
-                rasterio.Env().cache = None
-                return None
+        with rasterio.open(image_url, num_threads=8) as dataset:
+            with WarpedVRT(dataset) as vrt:
+                try:
+                    windowed_dataset = windowed_read_dataset(
+                        dataset=vrt,
+                        geom=geometry,
+                        no_data_value=_NODATA_VALUE,
+                        first_mask_position=_FIRST_MASK_POSITION,
+                        image_size=image_size
+                    )
+                except Exception as e:
+                    print(f'Error when opening the scene {scene_id}.')
+                    rasterio.Env().cache = None
+                    return None
 
     rasterio.Env().cache = None
 

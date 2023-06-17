@@ -261,6 +261,21 @@ class SourceType(Enum):
 
 
 @dataclass
+class MaskedImage:
+    data: numpy.ma.masked_array
+    acquisition_date: datetime.date
+    id: str
+
+
+@dataclass
+class ChangedData:
+    changed_mask: numpy.array
+    changed_date: str
+    changed_area: float
+    geojson: List[dict]
+
+
+@dataclass
 class Image:
     data: numpy.array
     mask: numpy.array
@@ -273,7 +288,6 @@ class Image:
     def create_bands_vars(self):
         """
         Creates a var dict representing each of the bands in the numpy.array as the represented color
-        :return:
         """
         _BAND_POSITION = 1
         band_keys = ['red', 'green', 'blue', 'nir', 'cloud_mask', 'c1', 'c2']
@@ -290,6 +304,15 @@ class Image:
                 band_vars[extra_bands.band_name] = self.data[int(extra_bands.band_position[_BAND_POSITION])]
 
         return band_vars
+
+    def create_masked_array_dataset(self) -> MaskedImage:
+        """
+        Create a Masked Image from an Image object
+        """
+        bool_cloud_mask = numpy.invert(self.cloud_mask.astype('bool'))
+        image_masked_array = numpy.ma.masked_array(data=self.data, mask=bool_cloud_mask)
+        masked_image = MaskedImage(image_masked_array, self.acquisition_date, self.id)
+        return masked_image
 
 
 @dataclass
