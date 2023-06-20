@@ -1,18 +1,18 @@
-import json
 import os
 import time
-from typing import List, Union
+from typing import List, Optional
 
 import numpy
-from rasterio import MemoryFile
 from shapely import Polygon
 
 from analyser import create_means_stdev_max_min_plot_figure, create_affected_area_plot_figure, \
     create_affected_area_image, calculate_list_difference_between_days, create_deforestation_area_throught_dates_figure, \
-    get_most_changed_area_figures, calculate_afected_area
+    get_most_changed_area_figures, calculate_afected_area, DifferenceMask
+from files_manager import save_file_locally, create_gif_image
 from geom_functions import epsg_transform
-from image_functions import open_single_image, merge_datasets, create_image_with_rasterio, get_scene_id
-from models import SceneInformation, SourceBands, Image, Index, ColorMap, MaskedImage
+from image_functions import open_single_image, merge_datasets, get_scene_id, \
+    create_raster_image
+from models import SceneInformation, SourceBands, Image, Index, ColorMap, ColorMaps
 from indices_functions import get_image_with_index, get_rgb_image, calculate_cloud_mask
 
 _FIRST_POSITION = 0
@@ -65,15 +65,16 @@ def open_multiple_images(
             opened_images.append(
                 Image(
                     data=image_bands,
-                    mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
-                    cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX]))*255,
+                    mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX])) * 255,
+                    cloud_mask=numpy.ones((image_bands.shape[_LINES_INDEX], image_bands.shape[_COLUMNS_INDEX])) * 255,
                     metadata=metadata,
                     id=get_scene_id(source.source_name, acquisition_date),
                     acquisition_date=acquisition_date,
                     source=source
                 )
             )
-        print(f'Time to OPEN and merge {len(scenes_from_same_day)} images from the same day = {time.perf_counter() - time_start_opening} s')
+        print(
+            f'Time to OPEN and merge {len(scenes_from_same_day)} images from the same day = {time.perf_counter() - time_start_opening} s')
     return opened_images
 
 
@@ -87,15 +88,16 @@ def create_images_datasets(list_images: List[Image], index: Index, geometry: Pol
     :return: List of Images with the index applied
     """
     area_geometry = epsg_transform(
-            geometry=geometry, from_epsg=_ORIGINAL_POLYGON_EPSG, to_epsg=list_images[_FIRST_POSITION].source.epsg
-        )
+        geometry=geometry, from_epsg=_ORIGINAL_POLYGON_EPSG, to_epsg=list_images[_FIRST_POSITION].source.epsg
+    )
 
     rgb_images_list = []
     valid_scenes = []
     for scene_image in list_images:
         rgb_image = get_rgb_image(scene_image, area_geometry, max_cloud_coverage)
         if rgb_image is not None:
-            rgb_image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(rgb_image.cloud_mask, rgb_image.data, rgb_image.mask)
+            rgb_image.cloud_mask, percentage_of_clouds = calculate_cloud_mask(rgb_image.cloud_mask, rgb_image.data,
+                                                                              rgb_image.mask)
             if percentage_of_clouds <= max_cloud_coverage:
                 rgb_images_list.append(rgb_image)
                 scene_image.cloud_mask = rgb_image.cloud_mask
@@ -113,21 +115,34 @@ def create_images_datasets(list_images: List[Image], index: Index, geometry: Pol
     return list_images_with_index, rgb_images_list
 
 
-def create_images_files(list_images: List[Image], color_map: ColorMap, file_extension: str):
+def create_index_images_files(list_images: List[Image], color_map: ColorMap, file_extension: str):
     """
-    Creates the images with a color map representation and writes it locally.
+    Creates all the RasterImages from the Images list with a color map representation and writes it locally.
 
     :param list_images: List of Images
     :param color_map: Color Map objected to be applied in the bands
     :param file_extension: File extension to save the image
-    :return: None
+    :return: List of RasterImages
     """
-    if os.path.exists('./images') is False:
-        os.mkdir('./images')
+    raster_images_list = []
     for image in list_images:
-        image_file = create_image_with_rasterio(image, color_map, file_extension)
-        with open(f'images/{image.id}.{file_extension}', 'wb') as file:
-            file.write(image_file)
+        raster_image = create_raster_image(image, color_map)
+        raster_image_data = raster_image.data
+        metadata = None
+        if file_extension == 'tiff':
+            raster_image_data = numpy.append(raster_image_data, [raster_image.cloud_mask], axis=0)
+            metadata = raster_image.metadata
+            metadata.update(count=raster_image_data.shape[0], dtype=raster_image_data.dtype)
+        raster_images_list.append(raster_image)
+        if file_extension == 'png':
+            parent_folder = 'visualizer'
+        else:
+            parent_folder = 'dataset'
+        if os.path.exists(f'./images/{parent_folder}') is False:
+            os.mkdir(f'./images/{parent_folder}')
+        folder_path = f'./images/{parent_folder}/{file_extension}'
+        save_file_locally(raster_image_data, folder_path, image.id, file_extension, metadata)
+    return raster_images_list
 
 
 def create_affected_area_information(
@@ -169,27 +184,56 @@ def create_affected_area_information(
 
     list_deforestation_diff_area_obj = get_most_changed_area_figures(difference_mask_list, initial_rgb_image)
 
-    return fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph,\
+    return fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
         list_deforestation_diff_area_obj
 
 
-def create_analisys_files(directory_folder: str, file: Union[numpy.array, dict], file_extension: str = 'png'):
-    if file_extension == 'png':
-        with MemoryFile() as memfile:
-            with memfile.open(
-                    driver=file_extension,
-                    count=file.shape[0],
-                    height=file.shape[1],
-                    width=file.shape[2],
-                    dtype=file.dtype,
-                    nodata=0,
-            ) as dst:
-                dst.write(file)
-            image_obj = memfile.read()
+def save_affected_area_analisys_files(
+        fig_means_stdev_max_min: numpy.array, fig_affected_area_graph: numpy.array,
+        afected_area_image: numpy.array, fig_deforestation_area_graph: Optional[numpy.array],
+        list_deforestation_diff_area_obj: List[DifferenceMask]
+):
+    """
+    Saves all the graphs and images of the analisys of the area
+    :param fig_means_stdev_max_min: Graph representing the means, stdev, max, and min values throught the months
+    :param fig_affected_area_graph: Graph representing the gain and loss of green area throught the months
+    :param afected_area_image: Image representing the gain and loss of green area throught the months
+    :param fig_deforestation_area_graph: Graph representing the affected areas by deforestation throught the months
+    :param list_deforestation_diff_area_obj: List of deforestation differences bettween the months
+    """
+    if os.path.exists('./images') is False:
+        os.mkdir('./images')
 
-        with open(f'images/{directory_folder}.{file_extension}', 'wb') as outputfile:
-            outputfile.write(image_obj)
+    save_file_locally(fig_means_stdev_max_min, './images/graphs', 'means_stdev_max_min_graph', 'png')
 
-    else:
-        with open(f'images/{directory_folder}.{file_extension}', 'w') as outputfile:
-            outputfile.write(json.dumps(file))
+    save_file_locally(fig_affected_area_graph, './images/graphs', 'affected_area_graph', 'png')
+
+    save_file_locally(afected_area_image, './images/visualizer', 'afected_area_image', 'png')
+
+    if fig_deforestation_area_graph is not None:
+        save_file_locally(fig_deforestation_area_graph, './images/graphs', 'deforestation_area_graph', 'png')
+
+    if os.path.exists('./images/visualizer/deforestation_areas') is False:
+        os.mkdir('./images/visualizer/deforestation_areas')
+    for index_diff, diff_mask in enumerate(list_deforestation_diff_area_obj):
+        file_path = f'./images/visualizer/deforestation_areas/{index_diff + 1}-{diff_mask.difference_date}'
+        save_file_locally(
+            diff_mask.lost_area_image, file_path, f'lost_area_{diff_mask.difference_date}', 'png')
+        save_file_locally(
+            diff_mask.lost_area_geojson, file_path, f'lost_area_{diff_mask.difference_date}_geojson', 'json')
+
+
+def save_index_rgb_images(index_images: List[Image], rgb_images: List[Image], original_colormap: ColorMap):
+    """
+    Saves locally all the PNG, TIFF and GIF of the RGB and Index images locally
+    """
+    raster_index_images = create_index_images_files(index_images, original_colormap, 'png')
+
+    raster_rbg_images = create_index_images_files(rgb_images, ColorMaps.truecolor.value, 'png')
+
+    create_gif_image(raster_index_images, 'ndvi')
+    create_gif_image(raster_rbg_images, 'rgb')
+
+    _ = create_index_images_files(index_images, ColorMaps.raw.value, 'tiff')
+
+    # _ = create_index_images_files(rgb_images, ColorMaps.raw.value, 'tiff')

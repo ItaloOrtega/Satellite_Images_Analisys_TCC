@@ -1,5 +1,6 @@
 import datetime
 import time
+from copy import copy
 from typing import Tuple, List
 
 import numpy
@@ -14,7 +15,7 @@ from shapely import Polygon
 from rasterio.windows import from_bounds as window_from_bounds
 from rasterio.transform import from_bounds as transform_from_bounds
 
-from models import Image, ColorMap
+from models import Image, ColorMap, RasterImage
 
 import boto3
 from botocore import UNSIGNED
@@ -209,35 +210,22 @@ def open_single_image(image_url: str, image_size: int, geometry: Polygon, scene_
     return windowed_dataset
 
 
-def create_image_with_rasterio(image: Image, color_map: ColorMap, file_extension: str):
+def create_raster_image(image: Image, color_map: ColorMap):
     """
-    Applies the raster type to the bands of the image and creates an image of the file extension asked by the user
-    using rasterio.
-
-    :param image: Object RasterImage containing the data and metadata of the tile
-    :param color_map: Color Map that will be applied in the image
-    :param file_extension: NamedTuple of the type of the file that will be returned to the user
-    :return: A bytes array of the image file in the file_extension format
+    Creates a RasterImage object from the Image with applied Index and the choosen ColorMap
     """
     image_with_color_map = color_map.apply_color_map(image.data)
-    raster_image = numpy.append(image_with_color_map, [image.mask], axis=0)
-    with MemoryFile() as memfile:
-        if file_extension == 'tiff':
-            raster_image = numpy.append(raster_image, [image.cloud_mask], axis=0)
-            metadata = image.metadata
-            metadata.update(count=raster_image.shape[0], dtype=raster_image.dtype)
-            if color_map.type == 'raw':
-                metadata.update(nodata=0)
-            with memfile.open(**metadata) as opened_memfile:
-                opened_memfile.write(raster_image)
-        else:
-            with memfile.open(
-                driver=file_extension,
-                count=raster_image.shape[0],
-                height=raster_image.shape[1],
-                width=raster_image.shape[2],
-                dtype=raster_image.dtype,
-                nodata=0,
-            ) as dst:
-                dst.write(raster_image)
-        return memfile.read()
+    raster_image_data = numpy.append(image_with_color_map, [image.mask.astype(image_with_color_map.dtype)], axis=0)
+    raster_image_metadata = copy(image.metadata)
+    if color_map.type == 'raw':
+        raster_image_metadata.update(nodata=0)
+    raster_image_metadata.update(count=raster_image_data.shape[_FIRST_POSITION], dtype=raster_image_data.dtype)
+    raster_image = RasterImage(
+        id=image.id,
+        data=raster_image_data,
+        cloud_mask=image.cloud_mask,
+        acquisition_date=image.acquisition_date,
+        metadata=raster_image_metadata,
+        used_colormap=color_map.type,
+    )
+    return raster_image

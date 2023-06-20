@@ -268,6 +268,16 @@ class MaskedImage:
 
 
 @dataclass
+class RasterImage:
+    id: str
+    data: numpy.array
+    cloud_mask: numpy.array
+    acquisition_date: datetime.date
+    metadata: Profile
+    used_colormap: str
+
+
+@dataclass
 class ChangedData:
     changed_mask: numpy.array
     changed_date: str

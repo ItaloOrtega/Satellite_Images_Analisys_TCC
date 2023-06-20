@@ -4,7 +4,8 @@ from datetime import datetime
 from geom_functions import create_a_square
 from models import SourceType, IndexExpressionType, ColorMaps
 from scenes_functions import get_scenes_ids_from_microsoft_planetary, get_scenes_urls
-from service import open_multiple_images, create_images_files, create_images_datasets, create_affected_area_information
+from service import open_multiple_images, create_images_datasets, \
+    create_affected_area_information, save_affected_area_analisys_files, save_index_rgb_images
 
 _FIRST_POSITION = 0
 
@@ -89,16 +90,7 @@ def get_images_with_index_from_middle_point(
         list_deforestation_diff_area_obj = create_affected_area_information(index_images, rgb_images[_FIRST_POSITION],
                                                                             area_from_geom, image_size)
 
-    # TODO: add all images to a PDF file and save locally and zip the files
+    save_affected_area_analisys_files(fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image,
+                                      fig_deforestation_area_graph, list_deforestation_diff_area_obj)
 
-    create_images_files(index_images, ColorMaps.raw.value, 'tiff')
-
-    # create_images_files(rgb_images, ColorMaps.truecolor.value, 'tiff')
-
-    if index == 'raw' or color_map == 'raw':
-        print('Not able to create PNG images.')
-
-    else:
-        create_images_files(index_images, color_map_object, 'png')
-
-        create_images_files(rgb_images, ColorMaps.truecolor.value, 'png')
+    save_index_rgb_images(index_images, rgb_images, color_map_object)
