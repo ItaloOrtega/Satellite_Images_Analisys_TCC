@@ -119,7 +119,7 @@ def create_affected_area_plot_figure(
     return affected_area_hectare_figure
 
 
-def calculate_afected_area(list_masked_images: List[MaskedImage]):
+def calculate_affected_area(list_masked_images: List[MaskedImage]):
     """
     Calculates the affected area of the wanted user area, by getting the inital values of the area and the occurences
     of deforestation and recoverage of green area.
@@ -319,7 +319,8 @@ def calculate_list_difference_between_days(masked_images_list: List[MaskedImage]
 
 def create_deforestation_area_throught_dates_figure(lost_mask_list: List[DifferenceMask]):
     """
-    Calculates the sum of all area lost due to deforestation through the months of the date window and plots the figure
+    Calculates the sum of all area lost due to deforestation through the months of the date window,
+    by using the loss of green area from one image to the other, and plots the figure
     """
     image_info_sub_lists = defaultdict(list)
 
@@ -396,8 +397,11 @@ def create_affected_area_image(
     Creates a gray scale of the initial RGB image to use as templeate to show all the lost and gain green area of the
     users' wanted image.
     """
-    gray_scale_img = create_gray_scale_img_from_rgb(
-        initial_rgb_image, [interpolated_recovered_area, interpolated_deforestation_area]
+    gray_scale_img_recovarage = create_gray_scale_img_from_rgb(
+        initial_rgb_image, [interpolated_recovered_area]
+    )
+    gray_scale_img_deforestation = create_gray_scale_img_from_rgb(
+        initial_rgb_image, [interpolated_deforestation_area]
     )
     # Creates a mask for all non-zero values
     mask_deforestation = interpolated_deforestation_area == 0
@@ -417,9 +421,20 @@ def create_affected_area_image(
         [mask_recoverage, mask_recoverage, mask_recoverage], axis=0
     )] = 0
 
-    # Adds all the arrays to gray image to finalize it
-    afected_area_image = numpy.append(
-        (gray_scale_img + img_recovered_with_color_map + img_deforestation_with_color_map),
+    deforestation_affected_area_image = numpy.append(
+        (gray_scale_img_deforestation + img_deforestation_with_color_map),
         numpy.ones((1, 256, 256), dtype='uint8') * 255, axis=0)
 
-    return plot_full_affected_area_figure(afected_area_image)
+    recovered_affected_area_image = numpy.append(
+        (gray_scale_img_recovarage + img_recovered_with_color_map),
+        numpy.ones((1, 256, 256), dtype='uint8') * 255, axis=0)
+
+    final_recovered_figure = plot_full_affected_area_figure(
+        recovered_affected_area_image, ['yellow', 'green'], 'Least to Most Occurences of Green Area Recoverage',
+        'Most Occurences of Green Area Recoverage')
+
+    final_deforestation_figure = plot_full_affected_area_figure(
+        deforestation_affected_area_image, ['red', 'yellow'], 'Most to Least Occurences of Green Area Deforestation',
+        'Most Occurences of Green Area Deforestation')
+
+    return final_recovered_figure, final_deforestation_figure

@@ -7,7 +7,7 @@ from shapely import Polygon
 
 from analyser import create_means_stdev_max_min_plot_figure, create_affected_area_plot_figure, \
     create_affected_area_image, calculate_list_difference_between_days, create_deforestation_area_throught_dates_figure, \
-    get_most_changed_area_figures, calculate_afected_area, DifferenceMask
+    get_most_changed_area_figures, calculate_affected_area, DifferenceMask
 from files_manager import save_file_locally, create_gif_image
 from geom_functions import epsg_transform
 from image_functions import open_single_image, merge_datasets, get_scene_id, \
@@ -163,7 +163,7 @@ def create_affected_area_information(
 
     fig_means_stdev_max_min = create_means_stdev_max_min_plot_figure(masked_ndvi_images)
 
-    interpolated_deforestation_area, interpolated_recovered_area = calculate_afected_area(masked_ndvi_images)
+    interpolated_deforestation_area, interpolated_recovered_area = calculate_affected_area(masked_ndvi_images)
 
     initial_date = masked_ndvi_images[_FIRST_POSITION].acquisition_date
     final_date = masked_ndvi_images[_LAST_POSITION].acquisition_date
@@ -173,8 +173,9 @@ def create_affected_area_information(
         original_geometry, image_size, initial_date, final_date
     )
 
-    afected_area_image = create_affected_area_image(initial_rgb_image, interpolated_deforestation_area,
-                                                    interpolated_recovered_area)
+    recoverage_affected_area_image, deforestation_affected_area_image = create_affected_area_image(
+        initial_rgb_image, interpolated_deforestation_area, interpolated_recovered_area
+    )
 
     difference_mask_list = calculate_list_difference_between_days(masked_ndvi_images,
                                                                   initial_rgb_image.metadata.get('transform'),
@@ -184,20 +185,22 @@ def create_affected_area_information(
 
     list_deforestation_diff_area_obj = get_most_changed_area_figures(difference_mask_list, initial_rgb_image)
 
-    return fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
-        list_deforestation_diff_area_obj
+    return fig_means_stdev_max_min, fig_affected_area_graph, recoverage_affected_area_image, \
+        deforestation_affected_area_image, fig_deforestation_area_graph, list_deforestation_diff_area_obj
 
 
 def save_affected_area_analisys_files(
         fig_means_stdev_max_min: numpy.array, fig_affected_area_graph: numpy.array,
-        afected_area_image: numpy.array, fig_deforestation_area_graph: Optional[numpy.array],
+        recoverage_affected_area_image: numpy.array, deforestation_affected_area_image: numpy.array,
+        fig_deforestation_area_graph: Optional[numpy.array],
         list_deforestation_diff_area_obj: List[DifferenceMask]
 ):
     """
     Saves all the graphs and images of the analisys of the area
     :param fig_means_stdev_max_min: Graph representing the means, stdev, max, and min values throught the months
     :param fig_affected_area_graph: Graph representing the gain and loss of green area throught the months
-    :param afected_area_image: Image representing the gain and loss of green area throught the months
+    :param recoverage_affected_area_image: Image representing the gain of green area throught the months by occur.
+    :param deforestation_affected_area_image: Image representing the gain of green area throught the months by occur.
     :param fig_deforestation_area_graph: Graph representing the affected areas by deforestation throught the months
     :param list_deforestation_diff_area_obj: List of deforestation differences bettween the months
     """
@@ -208,7 +211,11 @@ def save_affected_area_analisys_files(
 
     save_file_locally(fig_affected_area_graph, './images/graphs', 'affected_area_graph', 'png')
 
-    save_file_locally(afected_area_image, './images/visualizer', 'afected_area_image', 'png')
+    save_file_locally(recoverage_affected_area_image, './images/visualizer', 'recoverage_affected_area_image', 'png')
+
+    save_file_locally(
+        deforestation_affected_area_image, './images/visualizer', 'deforestation_affected_area_image', 'png'
+    )
 
     if fig_deforestation_area_graph is not None:
         save_file_locally(fig_deforestation_area_graph, './images/graphs', 'deforestation_area_graph', 'png')

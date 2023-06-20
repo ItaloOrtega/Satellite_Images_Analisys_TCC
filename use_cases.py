@@ -86,11 +86,14 @@ def get_images_with_index_from_middle_point(
         print("Erro! It's necessary more than 2 images to be able to create the analisys")
         raise ValueError
 
-    fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image, fig_deforestation_area_graph, \
-        list_deforestation_diff_area_obj = create_affected_area_information(index_images, rgb_images[_FIRST_POSITION],
-                                                                            area_from_geom, image_size)
+    fig_means_stdev_max_min, fig_affected_area_graph, recoverage_affected_area_image, deforestation_affected_area_image, \
+        fig_deforestation_area_graph, list_deforestation_diff_area_obj = create_affected_area_information(
+            index_images, rgb_images[_FIRST_POSITION],
+            area_from_geom, image_size
+        )
 
-    save_affected_area_analisys_files(fig_means_stdev_max_min, fig_affected_area_graph, afected_area_image,
-                                      fig_deforestation_area_graph, list_deforestation_diff_area_obj)
+    save_affected_area_analisys_files(fig_means_stdev_max_min, fig_affected_area_graph, recoverage_affected_area_image,
+                                      deforestation_affected_area_image, fig_deforestation_area_graph,
+                                      list_deforestation_diff_area_obj)
 
     save_index_rgb_images(index_images, rgb_images, color_map_object)
