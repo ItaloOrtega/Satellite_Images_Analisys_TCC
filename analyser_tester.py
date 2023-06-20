@@ -1,11 +1,14 @@
+import time
+from copy import copy
 from datetime import datetime
 
+import numpy
 import rasterio
 import os
 
-from analyser import create_masked_array_dataset, calculate_means_stdev_max_min, plot_means_stdev_max_min, create_afected_area_informations
 from geom_functions import create_a_square
-from models import Image, SourceType
+from models import Image, SourceType, ColorMaps
+from service import create_affected_area_information, save_affected_area_analisys_files, save_index_rgb_images
 
 ndvi_images = []
 rgb_images = []
@@ -14,7 +17,7 @@ for filename in os.listdir('images/tiff_images'):
         all_image_data = dataset.read()
         if 'NDVI' in filename:
             image_metadata = dataset.profile.copy()
-            ndvi_data = all_image_data[0]
+            ndvi_data = numpy.asarray([all_image_data[0]])
             image_mask = all_image_data[1]
             cloud_mask = all_image_data[2]
             ndvi_images.append(
@@ -47,13 +50,6 @@ for filename in os.listdir('images/tiff_images'):
 ndvi_images.sort(key=lambda x: x.acquisition_date)
 rgb_images.sort(key=lambda x: x.acquisition_date)
 
-masked_ndvi_images = []
-for ndvi_img in ndvi_images:
-    masked_ndvi_images.append(create_masked_array_dataset(ndvi_img))
-
-ndvi_images_infos = calculate_means_stdev_max_min(masked_ndvi_images)
-dates_images = [img.acquisition_date for img in masked_ndvi_images]
-
 center_point_latitude = -49.187900455436534
 center_point_longitude = -22.623691718299597
 
@@ -61,4 +57,14 @@ max_distance_meters = 10000
 
 original_geometry = create_a_square(max_distance_meters, center_point_latitude, center_point_longitude)
 
-create_afected_area_informations(masked_ndvi_images, rgb_images[0], original_geometry, 256)
+fig_means_stdev_max_min, fig_affected_area_graph, recoverage_affected_area_image, deforestation_affected_area_image, \
+    fig_deforestation_area_graph, list_deforestation_diff_area_obj = create_affected_area_information(
+        copy(ndvi_images[21:]), copy(rgb_images[0]), original_geometry, 256
+)
+
+save_affected_area_analisys_files(
+    fig_means_stdev_max_min, fig_affected_area_graph, recoverage_affected_area_image, deforestation_affected_area_image,
+    fig_deforestation_area_graph, list_deforestation_diff_area_obj
+)
+
+save_index_rgb_images(ndvi_images[21:], rgb_images[21:], ColorMaps.contrast_original.value)
