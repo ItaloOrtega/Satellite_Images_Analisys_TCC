@@ -130,7 +130,7 @@ def calculate_affected_area(list_masked_images: List[MaskedImage]):
     # Initials arrays representing areas already deforestaded/green
     initial_deforestad_area = None
     initial_green_area = None
-
+    occurency_threshold = 2
     # For LOOP to get the occurences of lost and gained green area
     for img_index, masked_image in enumerate(list_masked_images):
         # Creates the numpy array from the MaskedImage
@@ -150,22 +150,29 @@ def calculate_affected_area(list_masked_images: List[MaskedImage]):
         if img_index != 0:
             area_of_deforestation += deforestation_image_area
             area_of_reforestation += reforestation_image_area
+            # Updates initial masks of deforestation and green area after occurances of gain or loss
+            valid_change_deforestation = numpy.where(
+                area_of_reforestation != 0, area_of_reforestation, initial_deforestad_area
+            )
+            # Removes pixels that were reforestaded from initial deforasted area
+            initial_deforestaded_area[valid_change_deforestation >= occurency_threshold] = 0
+            valid_change_reforestation = numpy.where(
+                area_of_deforestation != 0, area_of_deforestation, initial_green_area
+            )
+            # Removes pixels that were deforestaded from initial green area mask
+            initial_green_area[valid_change_reforestation >= occurency_threshold] = 0
+            # Removes areas that was already deforestaded/recovered from the respective mask arrays
+            area_of_deforestation[initial_deforestaded_area != 0] = 0
+            area_of_reforestation[initial_green_area != 0] = 0
         # If the index == 0, it is the first image of the window date. where that all pixels in those arrays position
         # are disconsidered
         else:
-            initial_deforestad_area = deforestation_image_area
+            initial_deforestaded_area = deforestation_image_area
             initial_green_area = reforestation_image_area
 
     # Reset pixels with less occurences of deforestation/recoverage of areas
-    occurency_threshold = 3
-    if len(list_masked_images) < 10:
-        occurency_threshold = 2
     area_of_deforestation[area_of_deforestation < occurency_threshold] = 0
     area_of_reforestation[area_of_reforestation < occurency_threshold] = 0
-
-    # Removes areas that was already deforestaded/recovered from the respective mask arrays
-    area_of_deforestation[initial_deforestad_area != 0] = 0
-    area_of_reforestation[initial_green_area != 0] = 0
 
     # Interpolates the numpy arrays to have similar values to the NDVI index for better visualization in the final image
     interpolated_recovered_area = numpy.interp(area_of_reforestation,
